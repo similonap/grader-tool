@@ -140,3 +140,39 @@ export async function extractZipSmart(zipBuffer: Buffer, destDir: string): Promi
     await fs.writeFile(target, entry.getData());
   }
 }
+
+/**
+ * Zips an entire directory (recursively) into a buffer, preserving its
+ * structure exactly. Used for whole-project export, unlike
+ * extractZipSmart's project-root detection which is for solution/starter
+ * zips uploaded by someone else.
+ */
+export async function zipDirectoryToBuffer(dir: string): Promise<Buffer> {
+  const zip = new AdmZip();
+  await zip.addLocalFolderPromise(dir, {});
+  return zip.toBuffer();
+}
+
+/**
+ * Extracts a zip buffer into destDir exactly as archived, with no
+ * root-detection/stripping - the counterpart to zipDirectoryToBuffer, used
+ * for re-importing a previously exported project.
+ */
+export async function extractZipLiteral(zipBuffer: Buffer, destDir: string): Promise<void> {
+  const zip = new AdmZip(zipBuffer);
+  const resolvedDest = path.resolve(destDir);
+  await fs.mkdir(resolvedDest, { recursive: true });
+
+  for (const entry of zip.getEntries()) {
+    if (entry.isDirectory) continue;
+
+    const target = path.resolve(resolvedDest, entry.entryName);
+    if (target !== resolvedDest && !target.startsWith(resolvedDest + path.sep)) {
+      // zip-slip guard: skip anything that would escape destDir
+      continue;
+    }
+
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, entry.getData());
+  }
+}

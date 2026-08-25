@@ -5,7 +5,7 @@ import { detectEnvironment } from "./environment";
 import { slugify, uniqueSlug } from "./slug";
 import { computeSolutionDiff } from "./solutionDiff";
 import type { CriterionGrade, ProjectMeta, SolutionDiff, SolutionGrading, SolutionMeta, SolutionRecord } from "./types";
-import { extractZipSmart } from "./zip";
+import { extractZipLiteral, extractZipSmart, zipDirectoryToBuffer } from "./zip";
 
 export const DATA_ROOT = path.join(process.cwd(), "data");
 
@@ -82,6 +82,52 @@ export async function getProject(slug: string): Promise<ProjectMeta | null> {
   return readJson<ProjectMeta>(projectMetaPath(slug));
 }
 
+/** Deletes a project and everything under it (starter, solutions, grading). Returns false if it didn't exist. */
+export async function deleteProject(slug: string): Promise<boolean> {
+  const dir = projectDir(slug);
+  if (!(await pathExists(dir))) return false;
+  await fs.rm(dir, { recursive: true, force: true });
+  return true;
+}
+
+/** Zips up a project's entire directory (starter, grading key, solutions, grading) so it can be imported elsewhere. */
+export async function exportProject(slug: string): Promise<Buffer | null> {
+  const dir = projectDir(slug);
+  if (!(await pathExists(dir))) return null;
+  return zipDirectoryToBuffer(dir);
+}
+
+/**
+ * Re-creates a project from a zip previously produced by exportProject.
+ * Always lands under a fresh, unique slug (even if the exported project.json
+ * still names the slug it was exported from) so importing never clobbers an
+ * existing project.
+ */
+export async function importProject(zipBuffer: Buffer): Promise<ProjectMeta> {
+  await fs.mkdir(DATA_ROOT, { recursive: true });
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "grader-import-"));
+  try {
+    await extractZipLiteral(zipBuffer, tempDir);
+
+    const meta = await readJson<ProjectMeta>(path.join(tempDir, "project.json"));
+    if (!meta) throw new Error("Not a valid project export (missing project.json).");
+
+    const slug = await uniqueSlug(meta.label, (candidate) => pathExists(projectDir(candidate)));
+    const dir = projectDir(slug);
+    // Copy rather than rename: tempDir (os.tmpdir()) and DATA_ROOT can be on
+    // different filesystems/mounts, where rename would fail with EXDEV.
+    await fs.cp(tempDir, dir, { recursive: true });
+
+    const importedMeta: ProjectMeta = { ...meta, id: slug };
+    await writeJson(projectMetaPath(slug), importedMeta);
+
+    return importedMeta;
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 /** Records the model/language an autograde run just used, so the pickers default to them next time. */
 export async function saveLastAutogradeSettings(slug: string, model: string, language: string): Promise<void> {
   const project = await getProject(slug);
@@ -97,6 +143,17 @@ export async function getGradingKeyRaw(slug: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Replaces a project's grading key with new content. Existing solutions/grading are untouched. */
+export async function saveGradingKey(slug: string, gradingKeyText: string, gradingKeyName: string): Promise<void> {
+  const project = await getProject(slug);
+  if (!project) throw new Error(`Unknown project: ${slug}`);
+
+  await fs.writeFile(gradingKeyPath(slug), gradingKeyText, "utf8");
+
+  project.gradingKeyName = gradingKeyName;
+  await writeJson(projectMetaPath(slug), project);
 }
 
 export function getStarterDir(slug: string): string {

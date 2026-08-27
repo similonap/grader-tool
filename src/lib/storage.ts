@@ -71,7 +71,10 @@ export async function listProjects(): Promise<ProjectMeta[]> {
   const entries = await fs.readdir(DATA_ROOT, { withFileTypes: true });
   const projects: ProjectMeta[] = [];
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    // Dotdirs are never real projects - defensively excludes an in-progress
+    // (or, if cleanup ever failed, leftover) git-import staging directory,
+    // which would otherwise contain a real project.json of its own.
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
     const meta = await readJson<ProjectMeta>(projectMetaPath(entry.name));
     if (meta) projects.push(meta);
   }
@@ -218,32 +221,29 @@ export async function createProject(input: CreateProjectInput): Promise<ProjectM
 export async function importProjectFromGit(remoteUrl: string): Promise<ProjectMeta> {
   await fs.mkdir(DATA_ROOT, { recursive: true });
 
-  // Clone once into a scratch dir just to read the label out of
-  // project.json - the final slug depends on it, and isn't known yet.
-  const peekDir = await fs.mkdtemp(path.join(os.tmpdir(), "grader-git-import-"));
-  let label: string;
+  // Staged inside DATA_ROOT (not os.tmpdir()) so moving it into place at the
+  // end is a same-filesystem rename - no second clone just to learn the
+  // label before knowing the final slug, and no cross-filesystem fs.cp
+  // (which previously hit EACCES trying to chmod git's read-only object
+  // files when the two directories were on different mounts).
+  const stagingDir = path.join(DATA_ROOT, `.import-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`);
   try {
-    await cloneProjectRepo(remoteUrl, peekDir);
-    const meta = await readJson<ProjectMeta>(path.join(peekDir, "project.json"));
+    await cloneProjectRepo(remoteUrl, stagingDir);
+
+    const meta = await readJson<ProjectMeta>(path.join(stagingDir, "project.json"));
     if (!meta) throw new Error("Not a valid project repository (missing project.json at its root).");
-    label = meta.label;
+
+    const slug = await uniqueSlug(meta.label, (candidate) => pathExists(projectDir(candidate)));
+    const dir = projectDir(slug);
+    await fs.rename(stagingDir, dir);
+
+    const importedMeta: ProjectMeta = { ...meta, id: slug };
+    await writeJson(projectMetaPath(slug), importedMeta);
+
+    return importedMeta;
   } finally {
-    await fs.rm(peekDir, { recursive: true, force: true });
+    await fs.rm(stagingDir, { recursive: true, force: true });
   }
-
-  const slug = await uniqueSlug(label, (candidate) => pathExists(projectDir(candidate)));
-  const dir = projectDir(slug);
-  // Clone directly into the final location rather than cloning once and
-  // copying - copying a checked-out .git directory (whose object files are
-  // typically read-only) can hit EACCES on some filesystems when a plain
-  // recursive copy tries to chmod the destination to match.
-  await cloneProjectRepo(remoteUrl, dir);
-
-  const meta = await readJson<ProjectMeta>(path.join(dir, "project.json"));
-  const importedMeta: ProjectMeta = { ...(meta as ProjectMeta), id: slug };
-  await writeJson(projectMetaPath(slug), importedMeta);
-
-  return importedMeta;
 }
 
 export async function listSolutions(slug: string): Promise<SolutionMeta[]> {

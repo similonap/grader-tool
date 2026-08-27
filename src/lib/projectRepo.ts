@@ -175,5 +175,24 @@ export async function pushProjectRepo(dir: string, message: string): Promise<str
 export async function cloneProjectRepo(remoteUrl: string, destDir: string): Promise<void> {
   assertSafeRemote(remoteUrl);
   await runGit(path.dirname(destDir), ["clone", remoteUrl, destDir]);
+
+  // A remote whose HEAD was never pointed at a real branch (e.g. a plain
+  // `git init --bare` that was only ever pushed to, since a bare init fixes
+  // HEAD at whatever init.defaultBranch resolved to and a push doesn't
+  // retarget it) clones "successfully" but checks out nothing - recover by
+  // picking a real branch ourselves instead of leaving an empty working tree.
+  const checkedOutCommit = await runGit(destDir, ["rev-parse", "HEAD"]).catch(() => "");
+  if (!checkedOutCommit) {
+    const remoteBranches = await runGit(destDir, ["branch", "-r", "--format=%(refname:short)"])
+      .then((out) => out.split("\n").filter((b) => b && !b.endsWith("/HEAD")))
+      .catch(() => []);
+    const preferred =
+      remoteBranches.find((b) => b === "origin/main") ?? remoteBranches.find((b) => b === "origin/master") ?? remoteBranches[0];
+    if (!preferred) throw new Error("The remote repository has no branches to check out.");
+
+    const branchName = preferred.replace(/^origin\//, "");
+    await runGit(destDir, ["checkout", "-B", branchName, preferred]);
+  }
+
   await ensureGitignore(destDir);
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { GatewayModelOption } from "@/lib/aiGateway";
 import { CUSTOM_LANGUAGE, FEEDBACK_LANGUAGES, resolveInitialLanguage } from "@/lib/feedbackLanguages";
 import type { AutogradeJob, AutogradeJobItemStatus } from "@/lib/types";
@@ -16,12 +16,32 @@ const STATUS_LABEL: Record<AutogradeJobItemStatus, string> = {
 };
 
 const STATUS_COLOR: Record<AutogradeJobItemStatus, string> = {
-  pending: "text-zinc-400",
+  pending: "text-muted-2",
   running: "text-amber-600",
   done: "text-emerald-700",
   error: "text-red-600",
-  skipped: "text-zinc-400",
+  skipped: "text-muted-2",
 };
+
+/**
+ * The grading-status column shows a live job status while a run is actually
+ * in flight or just failed, but otherwise falls back to the solution's
+ * persistent graded/ungraded state - so a solution graded in a past session
+ * (or manually, never autograded at all) still reads as "Done", and one
+ * that's never been graded reads as "Ungraded" rather than blank.
+ */
+function gradingStatus(
+  graded: boolean,
+  jobItem: { status: AutogradeJobItemStatus } | undefined
+): { label: string; color: string } {
+  if (jobItem?.status === "pending" || jobItem?.status === "running" || jobItem?.status === "error") {
+    return { label: STATUS_LABEL[jobItem.status], color: STATUS_COLOR[jobItem.status] };
+  }
+  if (jobItem?.status === "skipped" && !graded) {
+    return { label: STATUS_LABEL.skipped, color: STATUS_COLOR.skipped };
+  }
+  return graded ? { label: "Done", color: "text-emerald-700" } : { label: "Ungraded", color: "text-red-600" };
+}
 
 export interface SolutionRow {
   id: string;
@@ -29,11 +49,14 @@ export interface SolutionRow {
   group: string | null;
   uploadedAtLabel: string;
   grade: { checked: number; total: number } | null;
+  /** Whether any grading (autograde or manual) has ever been saved for this solution. */
+  graded: boolean;
 }
 
 export function SolutionsTable({
   slug,
   solutions,
+  existingGroups,
   hasAiGatewayKey,
   hasStructuredGradingKey,
   initialModel,
@@ -41,6 +64,7 @@ export function SolutionsTable({
 }: {
   slug: string;
   solutions: SolutionRow[];
+  existingGroups: string[];
   hasAiGatewayKey: boolean;
   hasStructuredGradingKey: boolean;
   initialModel: string | null;
@@ -62,6 +86,27 @@ export function SolutionsTable({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const effectiveLanguage = (language === CUSTOM_LANGUAGE ? customLanguage : language).trim();
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const [groupSort, setGroupSort] = useState<"asc" | "desc" | null>(null);
+
+  // Ungrouped solutions always sort last, regardless of direction; within a
+  // group (or within "ungrouped"), fall back to the label so the order stays
+  // stable rather than shuffling ties around.
+  const displayedSolutions = useMemo(() => {
+    if (!groupSort) return solutions;
+    const dir = groupSort === "asc" ? 1 : -1;
+    return [...solutions].sort((a, b) => {
+      const ga = a.group ?? "";
+      const gb = b.group ?? "";
+      if (!ga && !gb) return a.label.localeCompare(b.label);
+      if (!ga) return 1;
+      if (!gb) return -1;
+      return dir * ga.localeCompare(gb) || a.label.localeCompare(b.label);
+    });
+  }, [solutions, groupSort]);
+
+  function toggleGroupSort() {
+    setGroupSort((prev) => (prev === null ? "asc" : prev === "asc" ? "desc" : null));
+  }
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -205,24 +250,37 @@ export function SolutionsTable({
   const settledCount = job?.items.filter((i) => i.status !== "pending" && i.status !== "running").length ?? 0;
   const erroredItems = job?.items.filter((i) => i.status === "error") ?? [];
   const allSelected = solutions.length > 0 && selected.size === solutions.length;
+  // Every solution is graded against the same key, so `total` (max points)
+  // is identical across graded rows - summing it across solutions would be
+  // meaningless, so this is an average score, not a running total. Filtered
+  // by `graded` (not just `grade` being present) so an untouched solution
+  // doesn't drag the average down by silently counting as a 0.
+  const gradedSolutions = solutions.filter((s) => s.graded);
+  const averageRow =
+    gradedSolutions.length > 0
+      ? {
+          avgChecked: gradedSolutions.reduce((sum, s) => sum + (s.grade?.checked ?? 0), 0) / gradedSolutions.length,
+          total: gradedSolutions[0].grade!.total,
+        }
+      : null;
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5">
+    <div className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <h2 className="text-sm font-semibold text-zinc-900">
-          Solutions <span className="font-normal text-zinc-400">({solutions.length})</span>
+        <h2 className="font-display text-lg font-semibold text-ink">
+          Solutions <span className="font-sans text-sm font-normal text-muted-2">({solutions.length})</span>
         </h2>
 
         {!hasAiGatewayKey ? (
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-muted">
             Set your Vercel AI Gateway key in{" "}
-            <Link href="/settings" className="underline">
+            <Link href="/settings" className="text-accent underline">
               Settings
             </Link>{" "}
             to enable autograding.
           </p>
         ) : !hasStructuredGradingKey ? (
-          <p className="text-xs text-zinc-500">Autograding needs a structured grading key.</p>
+          <p className="text-xs text-muted">Autograding needs a structured grading key.</p>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
             {modelsError ? (
@@ -232,7 +290,7 @@ export function SolutionsTable({
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
                 disabled={!gatewayModels || starting || running}
-                className="rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-zinc-400 focus:outline-none"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
               >
                 {!gatewayModels ? (
                   <option>Loading models…</option>
@@ -250,7 +308,7 @@ export function SolutionsTable({
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               disabled={starting || running}
-              className="rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-zinc-400 focus:outline-none"
+              className="rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
             >
               {FEEDBACK_LANGUAGES.map((l) => (
                 <option key={l} value={l}>
@@ -265,7 +323,7 @@ export function SolutionsTable({
                 onChange={(e) => setCustomLanguage(e.target.value)}
                 placeholder="e.g. Korean"
                 disabled={starting || running}
-                className="rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-zinc-400 focus:outline-none"
+                className="rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
               />
             )}
 
@@ -285,7 +343,7 @@ export function SolutionsTable({
                 disabled={
                   starting || selected.size === 0 || !selectedModel || (language === CUSTOM_LANGUAGE && !customLanguage.trim())
                 }
-                className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:brightness-105 disabled:opacity-40"
               >
                 {starting ? "Starting…" : `Autograde ${selected.size} selected`}
               </button>
@@ -296,8 +354,8 @@ export function SolutionsTable({
       {startError && <p className="mt-2 text-xs text-red-600">{startError}</p>}
 
       {job && (
-        <div className="mt-3 rounded-md border border-zinc-100 p-3">
-          <div className="flex items-center justify-between text-xs text-zinc-500">
+        <div className="mt-3 rounded-md border border-line p-3">
+          <div className="flex items-center justify-between font-mono text-xs text-muted">
             <span>
               {settledCount} / {jobTotal} ·{" "}
               {job.status === "running"
@@ -309,9 +367,9 @@ export function SolutionsTable({
                     : "failed"}
             </span>
           </div>
-          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
             <div
-              className="h-1.5 rounded-full bg-zinc-900 transition-all"
+              className="h-1.5 rounded-full bg-accent transition-all"
               style={{ width: `${jobTotal ? (settledCount / jobTotal) * 100 : 0}%` }}
             />
           </div>
@@ -332,8 +390,8 @@ export function SolutionsTable({
       )}
 
       {selected.size > 0 && (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-zinc-100 bg-zinc-50 px-3 py-2">
-          <span className="text-xs text-zinc-600">{selected.size} selected</span>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-line bg-surface-2 px-3 py-2">
+          <span className="text-xs text-muted">{selected.size} selected</span>
           <button
             type="button"
             onClick={deleteSelected}
@@ -347,12 +405,17 @@ export function SolutionsTable({
       {deleteError && <p className="mt-2 text-xs text-red-600">{deleteError}</p>}
 
       {solutions.length === 0 ? (
-        <p className="mt-3 text-sm text-zinc-500">No solutions uploaded yet.</p>
+        <p className="mt-3 text-sm text-muted">No solutions uploaded yet.</p>
       ) : (
         <div className="mt-4 overflow-x-auto">
+          <datalist id="solution-groups-datalist">
+            {existingGroups.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
           <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500">
+              <tr className="border-b border-line text-left font-mono text-xs text-muted-2">
                 <th className="w-8 py-2 pr-2">
                   <input
                     ref={selectAllRef}
@@ -360,52 +423,147 @@ export function SolutionsTable({
                     checked={allSelected}
                     onChange={toggleAll}
                     aria-label="Select all solutions"
-                    className="rounded border-zinc-300"
+                    className="rounded border-line-strong accent-accent"
                   />
                 </th>
                 <th className="py-2 pr-4 font-medium">Name</th>
-                <th className="py-2 pr-4 font-medium">Group</th>
+                <th className="py-2 pr-4 font-medium">
+                  <button type="button" onClick={toggleGroupSort} className="inline-flex items-center gap-1 hover:text-ink">
+                    Group
+                    <span className={`text-[10px] ${groupSort ? "text-accent" : "text-muted-2"}`}>
+                      {groupSort === "desc" ? "▼" : "▲"}
+                    </span>
+                  </button>
+                </th>
                 <th className="py-2 pr-4 font-medium">Grade</th>
                 <th className="py-2 pr-4 font-medium">Uploaded</th>
-                {job && <th className="py-2 pr-2 font-medium">Autograde</th>}
+                <th className="py-2 pr-2 font-medium">Autograde</th>
               </tr>
             </thead>
             <tbody>
-              {solutions.map((solution) => {
+              {displayedSolutions.map((solution) => {
                 const jobItem = job?.items.find((i) => i.solutionId === solution.id);
+                const status = gradingStatus(solution.graded, jobItem);
                 return (
-                  <tr key={solution.id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50">
+                  <tr key={solution.id} className="border-b border-line last:border-0 hover:bg-surface-2">
                     <td className="py-2 pr-2">
                       <input
                         type="checkbox"
                         checked={selected.has(solution.id)}
                         onChange={() => toggleOne(solution.id)}
                         aria-label={`Select ${solution.label}`}
-                        className="rounded border-zinc-300"
+                        className="rounded border-line-strong accent-accent"
                       />
                     </td>
                     <td className="py-2 pr-4">
-                      <Link href={`/projects/${slug}/solutions/${solution.id}`} className="text-zinc-800 hover:underline">
+                      <Link href={`/projects/${slug}/solutions/${solution.id}`} className="text-ink hover:text-accent hover:underline">
                         {solution.label}
                       </Link>
                     </td>
-                    <td className="py-2 pr-4 text-zinc-500">{solution.group ?? "—"}</td>
-                    <td className="py-2 pr-4 text-zinc-700">
-                      {solution.grade ? `${solution.grade.checked} / ${solution.grade.total} pts` : "—"}
+                    <td className="py-2 pr-4">
+                      <GroupCell
+                        key={`${solution.id}:${solution.group ?? ""}`}
+                        slug={slug}
+                        solutionId={solution.id}
+                        group={solution.group}
+                      />
                     </td>
-                    <td className="py-2 pr-4 text-zinc-400">{solution.uploadedAtLabel}</td>
-                    {job && (
-                      <td className="py-2 pr-2">
-                        {jobItem && <span className={STATUS_COLOR[jobItem.status]}>{STATUS_LABEL[jobItem.status]}</span>}
-                      </td>
-                    )}
+                    <td className="py-2 pr-4">
+                      {solution.grade && solution.graded ? (
+                        <span className="rounded-md bg-accent-soft px-1.5 py-0.5 font-mono text-xs font-semibold text-accent-ink">
+                          {solution.grade.checked} / {solution.grade.total} pts
+                        </span>
+                      ) : (
+                        <span className="text-muted-2">—</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4 font-mono text-xs text-muted-2">{solution.uploadedAtLabel}</td>
+                    <td className="py-2 pr-2">
+                      <span className={status.color}>{status.label}</span>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
+            {averageRow && (
+              <tfoot>
+                <tr className="border-t border-line-strong font-medium">
+                  <td className="py-2 pr-2" />
+                  <td className="py-2 pr-4 text-xs text-muted-2" colSpan={2}>
+                    Average ({gradedSolutions.length} graded)
+                  </td>
+                  <td className="py-2 pr-4">
+                    <span className="rounded-md bg-accent-soft px-1.5 py-0.5 font-mono text-xs font-semibold text-accent-ink">
+                      {fmtPts(averageRow.avgChecked)} / {fmtPts(averageRow.total)} pts (
+                      {averageRow.total > 0 ? Math.round((averageRow.avgChecked / averageRow.total) * 100) : 0}%)
+                    </span>
+                  </td>
+                  <td className="py-2 pr-4" />
+                  <td className="py-2 pr-2" />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       )}
     </div>
+  );
+}
+
+function fmtPts(n: number): string {
+  return (Math.round(n * 100) / 100).toString();
+}
+
+function GroupCell({
+  slug,
+  solutionId,
+  group,
+}: {
+  slug: string;
+  solutionId: string;
+  group: string | null;
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState(group ?? "");
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function save() {
+    const next = value.trim();
+    if (next === (group ?? "")) return;
+
+    setSaving(true);
+    setFailed(false);
+    try {
+      const res = await fetch(`/api/projects/${slug}/solutions/${solutionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ group: next || null }),
+      });
+      if (!res.ok) throw new Error();
+      router.refresh();
+    } catch {
+      setFailed(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <input
+      list="solution-groups-datalist"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+      placeholder="—"
+      disabled={saving}
+      title={failed ? "Failed to save - try again" : undefined}
+      className={`w-full min-w-[7rem] rounded border bg-transparent px-1.5 py-1 text-sm text-ink placeholder:text-muted-2 focus:bg-surface focus:outline-none disabled:opacity-40 ${
+        failed ? "border-red-300" : "border-transparent hover:border-line-strong focus:border-accent"
+      }`}
+    />
   );
 }

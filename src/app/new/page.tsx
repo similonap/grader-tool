@@ -45,15 +45,15 @@ export default function NewProjectPage() {
 
   return (
     <div className="mx-auto max-w-xl px-6 py-10">
-      <ol className="mb-8 flex items-center gap-2 text-sm text-zinc-500">
+      <ol className="mb-8 flex items-center gap-2 font-mono text-xs text-muted-2">
         <StepBadge active={step === "files"} label="1. Starter & grading key" />
-        <span className="text-zinc-300">&rarr;</span>
+        <span className="text-line-strong">&rarr;</span>
         <StepBadge active={step === "label"} label="2. Label" />
       </ol>
 
       {step === "files" && (
-        <form onSubmit={goToLabelStep} className="space-y-6">
-          <h1 className="text-xl font-semibold text-zinc-900">Upload starter project &amp; grading key</h1>
+        <form onSubmit={goToLabelStep} className="space-y-6 rounded-2xl border border-line bg-surface p-6 shadow-[var(--shadow)]">
+          <h1 className="font-display text-xl font-semibold text-ink">Upload starter project &amp; grading key</h1>
           <FileField
             id="starterZip"
             label="Starter project (.zip)"
@@ -73,7 +73,7 @@ export default function NewProjectPage() {
           <button
             type="submit"
             disabled={!starterZip || !gradingKey}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:brightness-105 disabled:opacity-40"
           >
             Next
           </button>
@@ -81,9 +81,9 @@ export default function NewProjectPage() {
       )}
 
       {step === "label" && (
-        <form onSubmit={handleCreate} className="space-y-6">
-          <h1 className="text-xl font-semibold text-zinc-900">Give this project a label</h1>
-          <p className="text-sm text-zinc-500">
+        <form onSubmit={handleCreate} className="space-y-6 rounded-2xl border border-line bg-surface p-6 shadow-[var(--shadow)]">
+          <h1 className="font-display text-xl font-semibold text-ink">Give this project a label</h1>
+          <p className="text-sm text-muted">
             Used to identify this grading project on the dashboard, e.g. &ldquo;CS101 - Library App&rdquo;.
           </p>
           <input
@@ -91,7 +91,7 @@ export default function NewProjectPage() {
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Project label"
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+            className="w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm focus:border-accent focus:outline-none"
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex items-center gap-3">
@@ -99,14 +99,14 @@ export default function NewProjectPage() {
               type="button"
               onClick={() => setStep("files")}
               disabled={submitting}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-40"
+              className="rounded-md border border-line-strong px-4 py-2 text-sm font-medium text-muted hover:border-muted-2 hover:text-ink disabled:opacity-40"
             >
               Back
             </button>
             <button
               type="submit"
               disabled={!label.trim() || submitting}
-              className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:brightness-105 disabled:opacity-40"
             >
               {submitting ? "Creating environment…" : "Create grading project"}
             </button>
@@ -118,9 +118,7 @@ export default function NewProjectPage() {
 }
 
 function StepBadge({ active, label }: { active: boolean; label: string }) {
-  return (
-    <span className={active ? "font-medium text-zinc-900" : ""}>{label}</span>
-  );
+  return <span className={active ? "font-semibold text-accent-ink" : ""}>{label}</span>;
 }
 
 function FileField({
@@ -148,18 +146,18 @@ function FileField({
 
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-zinc-900">
+      <label htmlFor={id} className="block text-sm font-medium text-ink">
         {label}
       </label>
-      <p className="mt-0.5 text-xs text-zinc-500">{hint}</p>
+      <p className="mt-0.5 text-xs text-muted">{hint}</p>
       <input
         id={id}
         type="file"
         accept={accept}
         onChange={handleChange}
-        className="mt-2 block w-full text-sm text-zinc-700 file:mr-4 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-200"
+        className="mt-2 block w-full text-sm text-muted file:mr-4 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-2 file:text-sm file:font-medium file:text-muted hover:file:bg-accent-soft hover:file:text-accent-ink"
       />
-      {file && <p className="mt-1 text-xs text-zinc-500">Selected: {file.name}</p>}
+      {file && <p className="mt-1 text-xs text-muted">Selected: {file.name}</p>}
     </div>
   );
 }

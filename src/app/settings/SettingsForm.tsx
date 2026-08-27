@@ -41,10 +41,10 @@ export function SettingsForm({ initiallyConfigured }: { initiallyConfigured: boo
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="aiGatewayKey" className="block text-sm font-medium text-zinc-900">
+        <label htmlFor="aiGatewayKey" className="block text-sm font-medium text-ink">
           Vercel AI Gateway API key
         </label>
-        <p className="mt-0.5 text-xs text-zinc-500">
+        <p className="mt-0.5 text-xs text-muted">
           {configured
             ? "A key is currently configured. Enter a new one to replace it."
             : "No key configured yet - autograding is disabled until one is set."}
@@ -59,12 +59,12 @@ export function SettingsForm({ initiallyConfigured }: { initiallyConfigured: boo
           value={key}
           onChange={(e) => setKey(e.target.value)}
           placeholder={configured ? "••••••••••••" : "vck_..."}
-          className="min-w-0 flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+          className="min-w-0 flex-1 rounded-md border border-line-strong bg-surface px-3 py-2 text-sm focus:border-accent focus:outline-none"
         />
         <button
           type="submit"
           disabled={!key.trim() || saving}
-          className="shrink-0 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+          className="shrink-0 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:brightness-105 disabled:opacity-40"
         >
           Save
         </button>

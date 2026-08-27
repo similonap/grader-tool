@@ -59,14 +59,14 @@ const STATUS_DOT: Record<FileStatus, string> = {
   added: "bg-emerald-500",
   removed: "bg-red-500",
   modified: "bg-amber-500",
-  unchanged: "bg-zinc-300",
+  unchanged: "bg-line-strong",
 };
 
 const STATUS_TEXT: Record<FileStatus, string> = {
   added: "text-emerald-700",
   removed: "text-red-700",
   modified: "text-amber-700",
-  unchanged: "text-zinc-500",
+  unchanged: "text-muted",
 };
 
 const DEFAULT_CRITERION: CriterionGrade = { checked: false, comment: "", references: [] };
@@ -331,37 +331,37 @@ export function SolutionWorkspace({
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)_380px]">
-      <aside className="rounded-lg border border-zinc-200 bg-white p-2 xl:max-h-[calc(100vh-12rem)] xl:overflow-auto">
+      <aside className="rounded-2xl border border-line bg-surface p-2 shadow-[var(--shadow)] xl:max-h-[calc(100vh-12rem)] xl:overflow-auto">
         {unchangedCount > 0 && (
-          <label className="mb-1 flex items-center gap-2 border-b border-zinc-100 px-2 pb-2 text-xs text-zinc-500">
+          <label className="mb-1 flex items-center gap-2 border-b border-line px-2 pb-2 text-xs text-muted">
             <input
               type="checkbox"
               checked={showUnchanged}
               onChange={(e) => setShowUnchanged(e.target.checked)}
-              className="rounded border-zinc-300"
+              className="rounded border-line-strong accent-accent"
             />
             Show {unchangedCount} unchanged file{unchangedCount === 1 ? "" : "s"}
           </label>
         )}
         {tree.length === 0 ? (
-          <p className="px-2 py-1 text-xs text-zinc-500">No changed files.</p>
+          <p className="px-2 py-1 text-xs text-muted">No changed files.</p>
         ) : (
           <FileTree nodes={tree} selectedPath={selected?.path ?? null} onSelect={selectFileFromTree} />
         )}
       </aside>
 
-      <section className="min-w-0 rounded-lg border border-zinc-200 bg-white">
+      <section className="min-w-0 rounded-2xl border border-line bg-surface shadow-[var(--shadow)]">
         {!selected ? (
-          <p className="p-6 text-sm text-zinc-500">No files found.</p>
+          <p className="p-6 text-sm text-muted">No files found.</p>
         ) : (
           <>
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-2.5">
-              <code className="text-sm text-zinc-800">{selected.path}</code>
+            <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+              <code className="text-sm">{selected.path}</code>
               <span className={`text-xs font-medium ${STATUS_TEXT[selected.status]}`}>{selected.status}</span>
             </div>
 
             {pickingForCriterion && (
-              <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+              <div className="flex items-center justify-between gap-3 border-b border-accent/30 bg-accent-soft px-4 py-2 text-xs text-accent-ink">
                 <span>
                   Click a line to reference it from{" "}
                   <strong>&ldquo;{criteriaIndex.get(pickingForCriterion) ?? pickingForCriterion}&rdquo;</strong>
@@ -374,13 +374,13 @@ export function SolutionWorkspace({
 
             <div ref={diffContainerRef} className="overflow-auto xl:max-h-[calc(100vh-12rem)]">
               {selected.status === "unchanged" ? (
-                <p className="p-6 text-sm text-zinc-500">No changes in this file.</p>
+                <p className="p-6 text-sm text-muted">No changes in this file.</p>
               ) : loading || !diff ? (
-                <p className="p-6 text-sm text-zinc-500">Loading diff…</p>
+                <p className="p-6 text-sm text-muted">Loading diff…</p>
               ) : diff.error ? (
                 <p className="p-6 text-sm text-red-600">{diff.error}</p>
               ) : diff.binary ? (
-                <p className="p-6 text-sm text-zinc-500">
+                <p className="p-6 text-sm text-muted">
                   Binary file changed{" "}
                   {typeof diff.oldSize === "number" && typeof diff.newSize === "number"
                     ? `(${diff.oldSize} → ${diff.newSize} bytes)`
@@ -466,7 +466,7 @@ function TreeItem({
         <details open>
           <summary
             style={{ paddingLeft }}
-            className="cursor-pointer select-none rounded px-2 py-1 text-zinc-600 hover:bg-zinc-50"
+            className="cursor-pointer select-none rounded px-2 py-1 text-muted hover:bg-surface-2"
           >
             {node.name}
           </summary>
@@ -490,7 +490,7 @@ function TreeItem({
         onClick={() => onSelect(entry)}
         style={{ paddingLeft: paddingLeft + 14 }}
         className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left ${
-          isSelected ? "bg-zinc-100 text-zinc-900" : "text-zinc-700 hover:bg-zinc-50"
+          isSelected ? "bg-accent-soft text-accent-ink" : "text-muted hover:bg-surface-2"
         }`}
       >
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[entry.status]}`} />
@@ -512,7 +512,7 @@ function DiffTable({
   onPickLine: (line: DiffLine, index: number) => void;
 }) {
   if (lines.length === 0) {
-    return <p className="p-6 text-sm text-zinc-500">Empty file.</p>;
+    return <p className="p-6 text-sm text-muted">Empty file.</p>;
   }
 
   return (
@@ -533,18 +533,18 @@ function DiffTable({
                 .filter(Boolean)
                 .join(" ")}
             >
-              <td className="w-10 select-none border-r border-zinc-100 px-2 py-0.5 text-right text-zinc-400">
+              <td className="w-10 select-none border-r border-line px-2 py-0.5 text-right text-muted-2">
                 {line.oldLineNo ?? ""}
               </td>
-              <td className="w-10 select-none border-r border-zinc-100 px-2 py-0.5 text-right text-zinc-400">
+              <td className="w-10 select-none border-r border-line px-2 py-0.5 text-right text-muted-2">
                 {line.newLineNo ?? ""}
               </td>
               <td
                 className={`whitespace-pre px-3 py-0.5 ${
-                  line.type === "add" ? "text-emerald-800" : line.type === "remove" ? "text-red-800" : "text-zinc-700"
+                  line.type === "add" ? "text-emerald-800" : line.type === "remove" ? "text-red-800" : "text-ink"
                 }`}
               >
-                <span className="mr-2 select-none text-zinc-400">
+                <span className="mr-2 select-none text-muted-2">
                   {line.type === "add" ? "+" : line.type === "remove" ? "-" : " "}
                 </span>
                 {line.content}
@@ -615,18 +615,18 @@ function GradingPanel({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-zinc-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-zinc-900">Autograde with AI</h2>
+      <div className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
+        <h2 className="font-display text-lg font-semibold text-ink">Autograde with AI</h2>
         {!hasAiGatewayKey ? (
-          <p className="mt-1 text-xs text-zinc-500">
+          <p className="mt-1 text-xs text-muted">
             Set your Vercel AI Gateway key in{" "}
-            <Link href="/settings" className="underline">
+            <Link href="/settings" className="text-accent underline">
               Settings
             </Link>{" "}
             to enable this.
           </p>
         ) : !gradingKey?.sections ? (
-          <p className="mt-1 text-xs text-zinc-500">Needs a structured grading key - not available for this project.</p>
+          <p className="mt-1 text-xs text-muted">Needs a structured grading key - not available for this project.</p>
         ) : (
           <div className="mt-2 space-y-2">
             {modelsError ? (
@@ -636,7 +636,7 @@ function GradingPanel({
                 value={selectedModel}
                 onChange={(e) => onSelectModel(e.target.value)}
                 disabled={!gatewayModels || autogradeRunning}
-                className="w-full rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-zinc-400 focus:outline-none"
+                className="w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
               >
                 {!gatewayModels ? (
                   <option>Loading models…</option>
@@ -651,12 +651,12 @@ function GradingPanel({
             )}
 
             <div>
-              <label className="mb-1 block text-[11px] font-medium text-zinc-500">Feedback language</label>
+              <label className="mb-1 block text-[11px] font-medium text-muted">Feedback language</label>
               <select
                 value={language}
                 onChange={(e) => onSelectLanguage(e.target.value)}
                 disabled={autogradeRunning}
-                className="w-full rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-zinc-400 focus:outline-none"
+                className="w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
               >
                 {FEEDBACK_LANGUAGES.map((l) => (
                   <option key={l} value={l}>
@@ -671,7 +671,7 @@ function GradingPanel({
                   onChange={(e) => onCustomLanguage(e.target.value)}
                   placeholder="e.g. Korean"
                   disabled={autogradeRunning}
-                  className="mt-1.5 w-full rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs focus:border-zinc-400 focus:outline-none"
+                  className="mt-1.5 w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
                 />
               )}
             </div>
@@ -680,7 +680,7 @@ function GradingPanel({
               type="button"
               onClick={onRunAutograde}
               disabled={autogradeRunning || !selectedModel || (language === CUSTOM_LANGUAGE && !customLanguage.trim())}
-              className="w-full rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+              className="w-full rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:brightness-105 disabled:opacity-40"
             >
               {autogradeRunning ? "Grading…" : "Run autograde"}
             </button>
@@ -689,34 +689,34 @@ function GradingPanel({
         )}
       </div>
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-5">
+      <div className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-900">Manual grading</h2>
+          <h2 className="font-display text-lg font-semibold text-ink">Manual grading</h2>
           {total > 0 && (
-            <span className="text-sm font-medium text-zinc-700">
+            <span className="rounded-md bg-accent-soft px-2 py-0.5 font-mono text-xs font-semibold text-accent-ink">
               {checked} / {total} pts
             </span>
           )}
         </div>
-        <p className="mt-0.5 text-xs text-zinc-400">Autosaves as you edit.</p>
+        <p className="mt-0.5 text-xs text-muted-2">Autosaves as you edit.</p>
 
         <textarea
           value={grading.overallComment}
           onChange={(e) => onOverallComment(e.target.value)}
           placeholder="Overall notes about this solution…"
           rows={3}
-          className="mt-3 w-full resize-y rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs focus:border-zinc-400 focus:outline-none"
+          className="mt-3 w-full resize-y rounded-md border border-line px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
         />
       </div>
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-5">
+      <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow)]">
         {!gradingKey?.sections ? (
-          <p className="text-xs text-zinc-500">
+          <p className="p-5 text-xs text-muted">
             No structured grading key criteria found, so per-criterion checkboxes aren&rsquo;t available. Use the
             overall notes above instead.
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="divide-y divide-line">
             {gradingKey.sections.map((section, si) => {
               const sectionCriteria = section.criteria ?? [];
               const sectionPoints = sectionCriteria.reduce((sum, c) => sum + (c.points ?? 0), 0);
@@ -726,34 +726,40 @@ function GradingPanel({
               }, 0);
 
               return (
-                <details key={section.id ?? si} open className="rounded-md border border-zinc-100 px-3 py-2">
-                  <summary className="cursor-pointer text-sm font-medium text-zinc-800">
-                    {section.title ?? `Section ${si + 1}`}{" "}
-                    <span className="font-normal text-zinc-400">
-                      ({sectionChecked} / {sectionPoints} pts)
+                <details key={section.id ?? si} open>
+                  <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-2.5 font-display text-sm font-semibold text-ink">
+                    {section.title ?? `Section ${si + 1}`}
+                    <span className="rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-normal text-muted">
+                      {fmtPts(sectionChecked)} / {fmtPts(sectionPoints)} pts
                     </span>
                   </summary>
 
-                  <ul className="mt-2 space-y-2">
+                  <ul className="flex flex-col">
                     {sectionCriteria.map((criterion, ci) => {
                       const id = criterionId(section, si, criterion, ci);
                       const grade = grading.criteria[id] ?? DEFAULT_CRITERION;
                       const picking = pickingForCriterion === id;
 
                       return (
-                        <li key={id} className="rounded-md border border-zinc-100 p-2.5">
-                          <div className="flex items-start gap-2">
+                        <li
+                          key={id}
+                          className={`border-t border-line px-4 py-3 transition-colors ${grade.checked ? "bg-accent-soft" : ""}`}
+                        >
+                          <div className="flex items-start gap-2.5">
                             <input
                               type="checkbox"
                               checked={grade.checked}
                               onChange={() => onToggle(id)}
-                              className="mt-0.5 shrink-0 rounded border-zinc-300"
+                              className="mt-0.5 h-4 w-4 shrink-0 rounded border-line-strong accent-accent"
                             />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-2">
-                                <p className="text-xs text-zinc-700">{criterion.description}</p>
-                                <span className="shrink-0 text-xs text-zinc-400">
-                                  {criterion.points} pt{criterion.points === 1 ? "" : "s"}
+                                <p className="text-xs text-ink">
+                                  {criterion.id && <span className="mr-1.5 font-mono text-[11px] text-muted-2">{criterion.id}</span>}
+                                  {criterion.description}
+                                </p>
+                                <span className="shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 font-mono text-[11px] font-semibold text-accent-ink">
+                                  {fmtPts(criterion.points ?? 0)}
                                 </span>
                               </div>
 
@@ -762,7 +768,7 @@ function GradingPanel({
                                 onChange={(e) => onComment(id, e.target.value)}
                                 placeholder="What's right or wrong here…"
                                 rows={2}
-                                className="mt-1.5 w-full resize-y rounded border border-zinc-200 px-2 py-1 text-xs focus:border-zinc-400 focus:outline-none"
+                                className="mt-1.5 w-full resize-y rounded border border-line bg-surface px-2 py-1 text-xs focus:border-accent focus:outline-none"
                               />
 
                               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -786,7 +792,7 @@ function GradingPanel({
                                   <button
                                     type="button"
                                     onClick={() => onStartPicking(id)}
-                                    className="rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
+                                    className="rounded-full border border-dashed border-line-strong px-2 py-0.5 text-[11px] text-muted hover:border-muted-2 hover:text-ink"
                                   >
                                     + Add reference
                                   </button>
@@ -808,6 +814,10 @@ function GradingPanel({
   );
 }
 
+function fmtPts(n: number): string {
+  return (Math.round(n * 100) / 100).toString();
+}
+
 function ReferenceChip({
   reference,
   onGo,
@@ -819,7 +829,7 @@ function ReferenceChip({
 }) {
   const fileName = reference.file.split("/").pop();
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 py-0.5 pl-2 pr-1 text-[11px] text-zinc-600">
+    <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 py-0.5 pl-2 pr-1 font-mono text-[11px] text-muted">
       <button type="button" onClick={onGo} title={reference.file} className="hover:underline">
         {fileName}:{reference.line}
       </button>
@@ -827,7 +837,7 @@ function ReferenceChip({
         type="button"
         onClick={onRemove}
         aria-label="Remove reference"
-        className="rounded-full px-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700"
+        className="rounded-full px-1 text-muted-2 hover:bg-line-strong hover:text-ink"
       >
         ×
       </button>

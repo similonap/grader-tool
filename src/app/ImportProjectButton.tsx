@@ -37,7 +37,7 @@ export function ImportProjectButton() {
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={importing}
-        className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
+        className="rounded-md border border-line-strong px-3 py-2 text-sm font-medium text-muted hover:border-muted-2 hover:text-ink disabled:opacity-40"
       >
         {importing ? "Importing…" : "Import project"}
       </button>

@@ -1,5 +1,5 @@
 import { GatewayAuthenticationError, createGateway } from "@ai-sdk/gateway";
-import { AISDKError, APICallError, generateObject } from "ai";
+import { AISDKError, APICallError, NoObjectGeneratedError, generateObject } from "ai";
 import { z } from "zod";
 import { allCriterionIds, criterionId, type GradingKeyDoc } from "./gradingKey";
 import type { CodeReference, CriterionGrade, StoredFileDiff } from "./types";
@@ -126,6 +126,17 @@ function describeGatewayError(err: unknown): string {
     if (APICallError.isInstance(err)) {
       return `AI Gateway request failed (${err.statusCode ?? "?"}): ${err.message}`;
     }
+    if (NoObjectGeneratedError.isInstance(err)) {
+      // The model produced no usable output at all - by far the most common
+      // cause is running out of its output-token budget (large rubrics need
+      // a lot of tokens for the full per-criterion JSON, and reasoning
+      // models can burn through the same budget on hidden reasoning before
+      // ever emitting the response), surfaced here as finishReason "length".
+      const ranOutOfTokens = err.finishReason === "length";
+      return ranOutOfTokens
+        ? `${err.message} This model likely ran out of output tokens before finishing (large grading keys need a lot of output) - try a different model.`
+        : err.message;
+    }
     if (AISDKError.isInstance(err)) {
       return err.message;
     }
@@ -164,7 +175,12 @@ export async function autogradeSolution(params: AutogradeParams): Promise<Autogr
         "You are grading a student's code submission against the rubric below, using a diff between the starter code they were given and their submission. For every criterion listed in the rubric, decide whether it is satisfied (checked: true) based only on what the diff shows, and write a short comment (1-2 sentences) explaining your judgment either way. When a specific place in the diff supports your judgment, cite it in `references` using the exact file path and the bracketed index shown at the start of that line, e.g. for a line shown as `[42]+ foo` use lineIndex: 42 (at most 2 references per criterion; use an empty array if there's nothing specific to cite). Be conservative: if the diff doesn't show enough to be sure a criterion is met, leave it unchecked and say what's missing. Return one entry in `criteria` for every criterion id in the rubric." +
         ` Write all free-text fields (\`comment\` and \`overallComment\`) in ${language}, regardless of what language the rubric or the code comments are written in.`,
       prompt,
-      maxOutputTokens: 8000,
+      // Generous headroom: a large grading key's full per-criterion JSON
+      // output alone can run into the thousands of tokens, and reasoning
+      // models spend some of this same budget on hidden reasoning before
+      // ever emitting the response - too low a cap here is the most common
+      // cause of "No object generated: the model did not return a response."
+      maxOutputTokens: 32000,
     });
   } catch (err) {
     throw new Error(describeGatewayError(err));

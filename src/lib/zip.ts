@@ -97,24 +97,40 @@ function computeStripPrefix(entryNames: string[]): string {
   return stripPrefix;
 }
 
+// How many levels of "a zip containing only another zip" to unwrap before
+// giving up and just extracting whatever is innermost as-is - a safety cap,
+// not an expected depth (one level covers "I zipped my already-zipped
+// submission").
+const MAX_UNWRAP_DEPTH = 5;
+
 /**
  * Extracts a zip buffer into destDir, first trying to locate the project's
  * real root via a marker file (package.json etc.) and falling back to
  * stripping a shared chain of single-folder wrappers if no marker is found,
  * so destDir ends up directly containing the project's own files.
  */
-export async function extractZipSmart(zipBuffer: Buffer, destDir: string): Promise<void> {
+export async function extractZipSmart(zipBuffer: Buffer, destDir: string, unwrapDepth = 0): Promise<void> {
   const zip = new AdmZip(zipBuffer);
   const entries = zip
     .getEntries()
     .filter((e) => !e.entryName.startsWith("__MACOSX/") && !e.entryName.split("/").pop()?.startsWith(".DS_Store"));
+
+  const fileEntries = entries.filter((e) => !e.isDirectory);
+
+  // If the archive's only real content is itself a zip file (someone zipped
+  // their already-zipped submission), unwrap it and extract that instead of
+  // treating the outer zip's single entry as the project.
+  if (unwrapDepth < MAX_UNWRAP_DEPTH && fileEntries.length === 1 && /\.zip$/i.test(fileEntries[0].entryName)) {
+    await extractZipSmart(fileEntries[0].getData(), destDir, unwrapDepth + 1);
+    return;
+  }
 
   // Only real files - and only ones outside build/dependency/VCS noise -
   // inform where the project root actually is. Directory-only entries never
   // produce output anyway (the extraction loop below skips them), and a
   // noise folder (node_modules, .git, .next, ...) sitting as a "sibling"
   // shouldn't be able to block detection either.
-  const signalNames = entries.filter((e) => !e.isDirectory && !isNoiseEntry(e.entryName)).map((e) => e.entryName);
+  const signalNames = fileEntries.filter((e) => !isNoiseEntry(e.entryName)).map((e) => e.entryName);
 
   const stripPrefix = findMarkerBasedRoot(signalNames) ?? computeStripPrefix(signalNames);
 
@@ -145,11 +161,19 @@ export async function extractZipSmart(zipBuffer: Buffer, destDir: string): Promi
  * Zips an entire directory (recursively) into a buffer, preserving its
  * structure exactly. Used for whole-project export, unlike
  * extractZipSmart's project-root detection which is for solution/starter
- * zips uploaded by someone else.
+ * zips uploaded by someone else. `excludeDirNames` skips any top-level
+ * subdirectory whose name is in the list (e.g. transient job history that
+ * isn't worth carrying along when re-importing elsewhere).
  */
-export async function zipDirectoryToBuffer(dir: string): Promise<Buffer> {
+export async function zipDirectoryToBuffer(dir: string, excludeDirNames: string[] = []): Promise<Buffer> {
   const zip = new AdmZip();
-  await zip.addLocalFolderPromise(dir, {});
+  // adm-zip's filter receives each entry's path already relative to `dir`
+  // (forward-slash separated, zip-entry style) - not an absolute disk path.
+  const filter =
+    excludeDirNames.length > 0
+      ? (entryPath: string) => !excludeDirNames.includes(entryPath.split("/")[0])
+      : undefined;
+  await zip.addLocalFolderPromise(dir, { filter });
   return zip.toBuffer();
 }
 

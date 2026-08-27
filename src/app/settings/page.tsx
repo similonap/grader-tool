@@ -8,12 +8,12 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-xl px-6 py-10">
-      <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Settings</h1>
-      <p className="mt-1 text-sm text-zinc-500">
+      <h1 className="font-display text-[28px] font-semibold text-ink">Settings</h1>
+      <p className="mt-1 text-sm text-muted">
         Configure the Vercel AI Gateway key used to autograde solutions with an AI model.
       </p>
 
-      <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-5">
+      <div className="mt-6 rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
         <SettingsForm initiallyConfigured={configured} />
       </div>
     </div>

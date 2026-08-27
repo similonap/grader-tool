@@ -70,9 +70,9 @@ export function UploadSolutionForm({ slug, existingGroups }: { slug: string; exi
         multiple
         onChange={handleFilesChange}
         disabled={uploading}
-        className="block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-zinc-700 hover:file:bg-zinc-200 disabled:opacity-40"
+        className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-muted hover:file:bg-accent-soft hover:file:text-accent-ink disabled:opacity-40"
       />
-      <p className="text-[11px] text-zinc-400">Select multiple .zip files at once to upload them all at once.</p>
+      <p className="text-[11px] text-muted-2">Select multiple .zip files at once to upload them all at once.</p>
 
       <div>
         <input
@@ -81,7 +81,7 @@ export function UploadSolutionForm({ slug, existingGroups }: { slug: string; exi
           onChange={(e) => setGroup(e.target.value)}
           placeholder="Group (optional, applies to all selected files)"
           disabled={uploading}
-          className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-zinc-500 focus:outline-none disabled:opacity-40"
+          className="w-full rounded-md border border-line-strong bg-surface px-3 py-1.5 text-sm focus:border-accent focus:outline-none disabled:opacity-40"
         />
         <datalist id="existing-groups">
           {existingGroups.map((g) => (
@@ -91,9 +91,9 @@ export function UploadSolutionForm({ slug, existingGroups }: { slug: string; exi
       </div>
 
       {items.length > 0 && (
-        <div className="rounded-md border border-zinc-100 p-2">
+        <div className="rounded-md border border-line p-2">
           {items.length > 1 && (
-            <p className="mb-1.5 px-1 text-[11px] text-zinc-500">
+            <p className="mb-1.5 px-1 text-[11px] text-muted">
               {doneCount} / {items.length} processed{errorCount > 0 ? ` · ${errorCount} failed` : ""}
             </p>
           )}
@@ -101,7 +101,7 @@ export function UploadSolutionForm({ slug, existingGroups }: { slug: string; exi
             {items.map((item, i) => (
               <li key={i}>
                 <div className="flex items-center justify-between gap-2 px-1 py-0.5">
-                  <span className="truncate text-zinc-700">{item.file.name}</span>
+                  <span className="truncate text-ink">{item.file.name}</span>
                   <span
                     className={
                       item.status === "done"
@@ -110,7 +110,7 @@ export function UploadSolutionForm({ slug, existingGroups }: { slug: string; exi
                           ? "text-red-600"
                           : item.status === "uploading"
                             ? "text-amber-600"
-                            : "text-zinc-400"
+                            : "text-muted-2"
                     }
                   >
                     {item.status === "pending" && "Waiting…"}
@@ -131,7 +131,7 @@ export function UploadSolutionForm({ slug, existingGroups }: { slug: string; exi
       <button
         type="submit"
         disabled={items.length === 0 || uploading}
-        className="w-full rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+        className="w-full rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:brightness-105 disabled:opacity-40"
       >
         {uploading
           ? `Uploading ${doneCount} / ${items.length}…`

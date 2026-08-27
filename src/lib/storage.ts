@@ -94,7 +94,9 @@ export async function deleteProject(slug: string): Promise<boolean> {
 export async function exportProject(slug: string): Promise<Buffer | null> {
   const dir = projectDir(slug);
   if (!(await pathExists(dir))) return null;
-  return zipDirectoryToBuffer(dir);
+  // Autograde job history is transient run-tracking state, not project data
+  // worth carrying along into an export/import.
+  return zipDirectoryToBuffer(dir, ["autograde-jobs"]);
 }
 
 /**
@@ -274,8 +276,6 @@ export async function addSolution(slug: string, input: AddSolutionInput): Promis
   if (!project) throw new Error(`Unknown project: ${slug}`);
 
   const baseLabel = input.originalFilename.replace(/\.zip$/i, "");
-  const groupSlug = input.group ? slugify(input.group) : null;
-  const scopeDir = groupSlug ? path.join(solutionsRootDir(slug), groupSlug) : solutionsRootDir(slug);
 
   // Re-uploading a solution with the same name overwrites it - including its
   // old diff and any saved grading, which would otherwise describe content
@@ -298,7 +298,9 @@ export async function addSolution(slug: string, input: AddSolutionInput): Promis
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 
-  const diffRelPath = path.relative(projectDir(slug), path.join(scopeDir, `${id}.json`));
+  // Group is pure metadata (SolutionMeta.group) for filtering/display -
+  // never used to shape where the solution's record lives on disk.
+  const diffRelPath = path.relative(projectDir(slug), path.join(solutionsRootDir(slug), `${id}.json`));
 
   const meta: SolutionMeta = {
     id,
@@ -323,6 +325,17 @@ export async function addSolution(slug: string, input: AddSolutionInput): Promis
   return meta;
 }
 
+/** Updates a solution's group metadata. Returns the updated solution, or null if it doesn't exist. */
+export async function updateSolutionGroup(slug: string, solutionId: string, group: string | null): Promise<SolutionMeta | null> {
+  const list = await listSolutions(slug);
+  const solution = list.find((s) => s.id === solutionId);
+  if (!solution) return null;
+
+  solution.group = group;
+  await writeJson(solutionsIndexPath(slug), list);
+  return solution;
+}
+
 /** Deletes the given solutions (diff, saved grading, and index entry). Returns how many were actually found and removed. */
 export async function deleteSolutions(slug: string, solutionIds: string[]): Promise<number> {
   const wanted = new Set(solutionIds);
@@ -337,6 +350,30 @@ export async function deleteSolutions(slug: string, solutionIds: string[]): Prom
   const remaining = list.filter((s) => !wanted.has(s.id));
   await writeJson(solutionsIndexPath(slug), remaining);
   return toRemove.length;
+}
+
+export interface PuntenlijstAssignment {
+  solutionId: string;
+  label: string;
+  group: string | null;
+}
+
+/** Applies confirmed puntenlijst matches: renames each solution's label and sets its group. The solution's id/URL/stored files are untouched. */
+export async function applyPuntenlijstAssignments(slug: string, assignments: PuntenlijstAssignment[]): Promise<number> {
+  const list = await listSolutions(slug);
+  const byId = new Map(list.map((s) => [s.id, s]));
+
+  let count = 0;
+  for (const assignment of assignments) {
+    const solution = byId.get(assignment.solutionId);
+    if (!solution) continue;
+    solution.label = assignment.label;
+    solution.group = assignment.group;
+    count++;
+  }
+
+  await writeJson(solutionsIndexPath(slug), list);
+  return count;
 }
 
 /**

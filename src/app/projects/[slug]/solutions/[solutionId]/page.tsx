@@ -43,26 +43,34 @@ export default async function SolutionDiffPage({
 
   return (
     <div className="mx-auto max-w-[110rem] px-6 py-8">
-      <p className="text-xs text-zinc-500">
-        <Link href="/" className="hover:underline">
+      <p className="font-mono text-xs text-muted-2">
+        <Link href="/" className="hover:text-ink hover:underline">
           Grading projects
         </Link>{" "}
         /{" "}
-        <Link href={`/projects/${slug}`} className="hover:underline">
+        <Link href={`/projects/${slug}`} className="hover:text-ink hover:underline">
           {project.label}
         </Link>{" "}
         / {solution.label}
       </p>
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">{solution.label}</h1>
-        <div className="flex gap-2 text-xs">
-          <Badge color="green" label={`${counts.added} added`} />
-          <Badge color="amber" label={`${counts.modified} modified`} />
-          <Badge color="red" label={`${counts.removed} removed`} />
-          <Badge color="zinc" label={`${counts.unchanged} unchanged`} />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-2xl font-semibold text-ink">{solution.label}</h1>
+        <div className="flex items-center gap-3">
+          <div className="flex gap-2 font-mono text-xs">
+            <Badge color="green" label={`${counts.added} added`} />
+            <Badge color="amber" label={`${counts.modified} modified`} />
+            <Badge color="red" label={`${counts.removed} removed`} />
+            <Badge color="zinc" label={`${counts.unchanged} unchanged`} />
+          </div>
+          <Link
+            href={`/projects/${slug}/solutions/${solutionId}/report`}
+            className="rounded-md border border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:border-muted-2 hover:text-ink"
+          >
+            View report
+          </Link>
         </div>
       </div>
-      {solution.group && <p className="mt-1 text-sm text-zinc-500">Group: {solution.group}</p>}
+      {solution.group && <p className="mt-1 text-sm text-muted">Group: {solution.group}</p>}
 
       <div className="mt-6">
         <SolutionWorkspace
@@ -85,7 +93,7 @@ function Badge({ color, label }: { color: "green" | "amber" | "red" | "zinc"; la
     green: "bg-emerald-50 text-emerald-700",
     amber: "bg-amber-50 text-amber-700",
     red: "bg-red-50 text-red-700",
-    zinc: "bg-zinc-100 text-zinc-500",
+    zinc: "bg-surface-2 text-muted",
   }[color];
-  return <span className={`rounded-full px-2.5 py-1 font-medium ${colorClasses}`}>{label}</span>;
+  return <span className={`rounded-md px-2.5 py-1 font-medium ${colorClasses}`}>{label}</span>;
 }

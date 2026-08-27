@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ImportProjectButton } from "./ImportProjectButton";
+import { ImportProjectFromGitButton } from "./ImportProjectFromGitButton";
 import { listProjects, listSolutions } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,10 @@ export default async function Home() {
             Each project pairs a starter project with a grading key, then holds the student solutions you upload against it.
           </p>
         </div>
-        <ImportProjectButton />
+        <div className="flex items-start gap-2">
+          <ImportProjectButton />
+          <ImportProjectFromGitButton />
+        </div>
       </div>
 
       {withCounts.length === 0 ? (

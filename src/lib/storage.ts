@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { detectEnvironment } from "./environment";
+import { cloneProjectRepo, initProjectRepo } from "./projectRepo";
 import { slugify, uniqueSlug } from "./slug";
 import { computeSolutionDiff } from "./solutionDiff";
 import type { CriterionGrade, ProjectMeta, SolutionDiff, SolutionGrading, SolutionMeta, SolutionRecord } from "./types";
@@ -9,7 +10,7 @@ import { extractZipLiteral, extractZipSmart, zipDirectoryToBuffer } from "./zip"
 
 export const DATA_ROOT = path.join(process.cwd(), "data");
 
-function projectDir(slug: string): string {
+export function projectDir(slug: string): string {
   return path.join(DATA_ROOT, slug);
 }
 
@@ -194,7 +195,55 @@ export async function createProject(input: CreateProjectInput): Promise<ProjectM
   await writeJson(projectMetaPath(slug), meta);
   await writeJson(solutionsIndexPath(slug), [] satisfies SolutionMeta[]);
 
+  // Best-effort: every new project's data dir becomes its own local git
+  // repo automatically, ready for a remote to be added and pushed later.
+  // Must never fail project creation itself over this auxiliary step.
+  try {
+    await initProjectRepo(dir, null);
+  } catch (err) {
+    console.error(`Failed to initialize git repo for project ${slug}`, err);
+  }
+
   return meta;
+}
+
+/**
+ * Re-creates a project by cloning its git repo (previously set up via
+ * initProjectRepo/setProjectRemote and pushed). Unlike importProject (from a
+ * zip export), this keeps the clone's .git intact, so the imported copy
+ * stays linked to the same remote for future pull/push. Always lands under
+ * a fresh unique slug, even if the repo's project.json still names the slug
+ * it was pushed from, so importing never clobbers an existing project.
+ */
+export async function importProjectFromGit(remoteUrl: string): Promise<ProjectMeta> {
+  await fs.mkdir(DATA_ROOT, { recursive: true });
+
+  // Clone once into a scratch dir just to read the label out of
+  // project.json - the final slug depends on it, and isn't known yet.
+  const peekDir = await fs.mkdtemp(path.join(os.tmpdir(), "grader-git-import-"));
+  let label: string;
+  try {
+    await cloneProjectRepo(remoteUrl, peekDir);
+    const meta = await readJson<ProjectMeta>(path.join(peekDir, "project.json"));
+    if (!meta) throw new Error("Not a valid project repository (missing project.json at its root).");
+    label = meta.label;
+  } finally {
+    await fs.rm(peekDir, { recursive: true, force: true });
+  }
+
+  const slug = await uniqueSlug(label, (candidate) => pathExists(projectDir(candidate)));
+  const dir = projectDir(slug);
+  // Clone directly into the final location rather than cloning once and
+  // copying - copying a checked-out .git directory (whose object files are
+  // typically read-only) can hit EACCES on some filesystems when a plain
+  // recursive copy tries to chmod the destination to match.
+  await cloneProjectRepo(remoteUrl, dir);
+
+  const meta = await readJson<ProjectMeta>(path.join(dir, "project.json"));
+  const importedMeta: ProjectMeta = { ...(meta as ProjectMeta), id: slug };
+  await writeJson(projectMetaPath(slug), importedMeta);
+
+  return importedMeta;
 }
 
 export async function listSolutions(slug: string): Promise<SolutionMeta[]> {

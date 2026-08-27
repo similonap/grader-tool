@@ -4,6 +4,7 @@ import { allCriterionIds, checkedPoints, parseGradingKey, totalPoints } from "@/
 import { hasAiGatewayKey } from "@/lib/settings";
 import { getGradingKeyRaw, getGradingState, getProject, listSolutions } from "@/lib/storage";
 import { DeleteProjectButton } from "./DeleteProjectButton";
+import { ProjectRepoButton } from "./ProjectRepoButton";
 import { PuntenlijstImportButton } from "./PuntenlijstImportButton";
 import type { SolutionRow } from "./SolutionsTable";
 import { SolutionsTable } from "./SolutionsTable";
@@ -74,6 +75,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
         </div>
         <div className="flex items-start gap-2">
           <PuntenlijstImportButton slug={slug} />
+          <ProjectRepoButton slug={slug} />
           <Link
             href={`/projects/${slug}/grading-key`}
             className="rounded-md border border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:border-muted-2 hover:text-ink"

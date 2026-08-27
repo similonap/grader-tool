@@ -86,26 +86,42 @@ export function SolutionsTable({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const effectiveLanguage = (language === CUSTOM_LANGUAGE ? customLanguage : language).trim();
   const selectAllRef = useRef<HTMLInputElement>(null);
-  const [groupSort, setGroupSort] = useState<"asc" | "desc" | null>(null);
+  const [sort, setSort] = useState<{ column: "group" | "grade"; dir: "asc" | "desc" } | null>(null);
 
-  // Ungrouped solutions always sort last, regardless of direction; within a
-  // group (or within "ungrouped"), fall back to the label so the order stays
-  // stable rather than shuffling ties around.
+  // Ungrouped/ungraded solutions always sort last, regardless of direction;
+  // ties fall back to the label so the order stays stable rather than
+  // shuffling ties around.
   const displayedSolutions = useMemo(() => {
-    if (!groupSort) return solutions;
-    const dir = groupSort === "asc" ? 1 : -1;
-    return [...solutions].sort((a, b) => {
-      const ga = a.group ?? "";
-      const gb = b.group ?? "";
-      if (!ga && !gb) return a.label.localeCompare(b.label);
-      if (!ga) return 1;
-      if (!gb) return -1;
-      return dir * ga.localeCompare(gb) || a.label.localeCompare(b.label);
-    });
-  }, [solutions, groupSort]);
+    if (!sort) return solutions;
+    const dir = sort.dir === "asc" ? 1 : -1;
 
-  function toggleGroupSort() {
-    setGroupSort((prev) => (prev === null ? "asc" : prev === "asc" ? "desc" : null));
+    if (sort.column === "group") {
+      return [...solutions].sort((a, b) => {
+        const ga = a.group ?? "";
+        const gb = b.group ?? "";
+        if (!ga && !gb) return a.label.localeCompare(b.label);
+        if (!ga) return 1;
+        if (!gb) return -1;
+        return dir * ga.localeCompare(gb) || a.label.localeCompare(b.label);
+      });
+    }
+
+    return [...solutions].sort((a, b) => {
+      const ag = a.graded ? (a.grade?.checked ?? 0) : null;
+      const bg = b.graded ? (b.grade?.checked ?? 0) : null;
+      if (ag === null && bg === null) return a.label.localeCompare(b.label);
+      if (ag === null) return 1;
+      if (bg === null) return -1;
+      return dir * (ag - bg) || a.label.localeCompare(b.label);
+    });
+  }, [solutions, sort]);
+
+  function toggleSort(column: "group" | "grade") {
+    setSort((prev) => {
+      if (!prev || prev.column !== column) return { column, dir: "asc" };
+      if (prev.dir === "asc") return { column, dir: "desc" };
+      return null;
+    });
   }
 
   useEffect(() => {
@@ -428,16 +444,14 @@ export function SolutionsTable({
                 </th>
                 <th className="py-2 pr-4 font-medium">Name</th>
                 <th className="py-2 pr-4 font-medium">
-                  <button type="button" onClick={toggleGroupSort} className="inline-flex items-center gap-1 hover:text-ink">
-                    Group
-                    <span className={`text-[10px] ${groupSort ? "text-accent" : "text-muted-2"}`}>
-                      {groupSort === "desc" ? "▼" : "▲"}
-                    </span>
-                  </button>
+                  <SortButton label="Group" active={sort?.column === "group"} dir={sort?.dir} onClick={() => toggleSort("group")} />
                 </th>
-                <th className="py-2 pr-4 font-medium">Grade</th>
+                <th className="py-2 pr-4 font-medium">
+                  <SortButton label="Grade" active={sort?.column === "grade"} dir={sort?.dir} onClick={() => toggleSort("grade")} />
+                </th>
                 <th className="py-2 pr-4 font-medium">Uploaded</th>
                 <th className="py-2 pr-2 font-medium">Autograde</th>
+                <th className="py-2 pr-2 font-medium" />
               </tr>
             </thead>
             <tbody>
@@ -481,6 +495,14 @@ export function SolutionsTable({
                     <td className="py-2 pr-2">
                       <span className={status.color}>{status.label}</span>
                     </td>
+                    <td className="py-2 pr-2">
+                      <Link
+                        href={`/projects/${slug}/solutions/${solution.id}/report`}
+                        className="rounded-md border border-line-strong px-2 py-1 text-xs font-medium text-muted hover:border-muted-2 hover:text-ink"
+                      >
+                        Report
+                      </Link>
+                    </td>
                   </tr>
                 );
               })}
@@ -500,6 +522,7 @@ export function SolutionsTable({
                   </td>
                   <td className="py-2 pr-4" />
                   <td className="py-2 pr-2" />
+                  <td className="py-2 pr-2" />
                 </tr>
               </tfoot>
             )}
@@ -507,6 +530,25 @@ export function SolutionsTable({
         </div>
       )}
     </div>
+  );
+}
+
+function SortButton({
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir: "asc" | "desc" | undefined;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick} className="inline-flex items-center gap-1 hover:text-ink">
+      {label}
+      <span className={`text-[10px] ${active ? "text-accent" : "text-muted-2"}`}>{active && dir === "desc" ? "▼" : "▲"}</span>
+    </button>
   );
 }
 

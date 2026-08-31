@@ -93,6 +93,7 @@ export function SolutionWorkspace({
   hasAiGatewayKey,
   initialModel,
   initialLanguage,
+  initialLocked,
 }: {
   slug: string;
   solutionId: string;
@@ -102,7 +103,10 @@ export function SolutionWorkspace({
   hasAiGatewayKey: boolean;
   initialModel: string | null;
   initialLanguage: string | null;
+  initialLocked: boolean;
 }) {
+  const [locked, setLocked] = useState(initialLocked);
+  const [lockBusy, setLockBusy] = useState(false);
   const [showUnchanged, setShowUnchanged] = useState(false);
   const unchangedCount = useMemo(() => entries.filter((e) => e.status === "unchanged").length, [entries]);
   const visibleEntries = useMemo(
@@ -216,8 +220,25 @@ export function SolutionWorkspace({
     };
   }, [hasAiGatewayKey]);
 
+  async function toggleLock() {
+    setLockBusy(true);
+    try {
+      const res = await fetch(`/api/projects/${slug}/solutions/${solutionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locked: !locked }),
+      });
+      if (!res.ok) throw new Error();
+      setLocked((prev) => !prev);
+    } catch {
+      // best-effort - button just stays in its current state on failure
+    } finally {
+      setLockBusy(false);
+    }
+  }
+
   async function runAutograde() {
-    if (!selectedModel || !effectiveLanguage) return;
+    if (locked || !selectedModel || !effectiveLanguage) return;
 
     const hasExistingWork =
       grading.overallComment.trim() !== "" ||
@@ -270,7 +291,7 @@ export function SolutionWorkspace({
   }
 
   function handlePickLine(line: DiffLine, index: number) {
-    if (!pickingForCriterion || !selected) return;
+    if (locked || !pickingForCriterion || !selected) return;
     const effectiveLine = line.newLineNo ?? line.oldLineNo;
 
     const ref: CodeReference = {
@@ -296,6 +317,7 @@ export function SolutionWorkspace({
   }
 
   function toggleCriterion(id: string) {
+    if (locked) return;
     setGrading((prev) => ({
       ...prev,
       criteria: {
@@ -306,6 +328,7 @@ export function SolutionWorkspace({
   }
 
   function setCriterionComment(id: string, comment: string) {
+    if (locked) return;
     setGrading((prev) => ({
       ...prev,
       criteria: { ...prev.criteria, [id]: { ...(prev.criteria[id] ?? DEFAULT_CRITERION), comment } },
@@ -313,6 +336,7 @@ export function SolutionWorkspace({
   }
 
   function removeReference(id: string, refId: string) {
+    if (locked) return;
     setGrading((prev) => ({
       ...prev,
       criteria: {
@@ -326,6 +350,7 @@ export function SolutionWorkspace({
   }
 
   function setOverallComment(overallComment: string) {
+    if (locked) return;
     setGrading((prev) => ({ ...prev, overallComment }));
   }
 
@@ -401,6 +426,9 @@ export function SolutionWorkspace({
 
       <aside className="xl:max-h-[calc(100vh-12rem)] xl:overflow-auto">
         <GradingPanel
+          locked={locked}
+          lockBusy={lockBusy}
+          onToggleLock={toggleLock}
           gradingKey={gradingKey}
           grading={grading}
           pickingForCriterion={pickingForCriterion}
@@ -558,6 +586,9 @@ function DiffTable({
 }
 
 function GradingPanel({
+  locked,
+  lockBusy,
+  onToggleLock,
   gradingKey,
   grading,
   pickingForCriterion,
@@ -581,6 +612,9 @@ function GradingPanel({
   autogradeError,
   onRunAutograde,
 }: {
+  locked: boolean;
+  lockBusy: boolean;
+  onToggleLock: () => void;
   gradingKey: GradingKeyDoc | null;
   grading: SolutionGrading;
   pickingForCriterion: string | null;
@@ -615,6 +649,33 @@ function GradingPanel({
 
   return (
     <div className="space-y-4">
+      <div
+        className={`flex items-center justify-between gap-3 rounded-2xl border p-4 shadow-[var(--shadow)] ${
+          locked ? "border-accent/40 bg-accent-soft" : "border-line bg-surface"
+        }`}
+      >
+        <div>
+          <p className={`text-sm font-medium ${locked ? "text-accent-ink" : "text-ink"}`}>
+            {locked ? "🔒 Locked - finalized" : "🔓 Unlocked"}
+          </p>
+          <p className="mt-0.5 text-xs text-muted">
+            {locked ? "No further grading changes until unlocked." : "Lock once you're done, to mark this solution finalized."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onToggleLock}
+          disabled={lockBusy}
+          className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-40 ${
+            locked
+              ? "border border-accent text-accent-ink hover:bg-accent-soft"
+              : "bg-accent text-white hover:brightness-105"
+          }`}
+        >
+          {lockBusy ? "Saving…" : locked ? "Unlock" : "Lock"}
+        </button>
+      </div>
+
       <div className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
         <h2 className="font-display text-lg font-semibold text-ink">Autograde with AI</h2>
         {!hasAiGatewayKey ? (
@@ -635,7 +696,7 @@ function GradingPanel({
               <select
                 value={selectedModel}
                 onChange={(e) => onSelectModel(e.target.value)}
-                disabled={!gatewayModels || autogradeRunning}
+                disabled={locked || !gatewayModels || autogradeRunning}
                 className="w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
               >
                 {!gatewayModels ? (
@@ -655,7 +716,7 @@ function GradingPanel({
               <select
                 value={language}
                 onChange={(e) => onSelectLanguage(e.target.value)}
-                disabled={autogradeRunning}
+                disabled={locked || autogradeRunning}
                 className="w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
               >
                 {FEEDBACK_LANGUAGES.map((l) => (
@@ -670,7 +731,7 @@ function GradingPanel({
                   value={customLanguage}
                   onChange={(e) => onCustomLanguage(e.target.value)}
                   placeholder="e.g. Korean"
-                  disabled={autogradeRunning}
+                  disabled={locked || autogradeRunning}
                   className="mt-1.5 w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
                 />
               )}
@@ -679,7 +740,7 @@ function GradingPanel({
             <button
               type="button"
               onClick={onRunAutograde}
-              disabled={autogradeRunning || !selectedModel || (language === CUSTOM_LANGUAGE && !customLanguage.trim())}
+              disabled={locked || autogradeRunning || !selectedModel || (language === CUSTOM_LANGUAGE && !customLanguage.trim())}
               className="w-full rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:brightness-105 disabled:opacity-40"
             >
               {autogradeRunning ? "Grading…" : "Run autograde"}
@@ -705,7 +766,8 @@ function GradingPanel({
           onChange={(e) => onOverallComment(e.target.value)}
           placeholder="Overall notes about this solution…"
           rows={3}
-          className="mt-3 w-full resize-y rounded-md border border-line px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
+          disabled={locked}
+          className="mt-3 w-full resize-y rounded-md border border-line px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none disabled:opacity-60"
         />
       </div>
 
@@ -750,7 +812,8 @@ function GradingPanel({
                               type="checkbox"
                               checked={grade.checked}
                               onChange={() => onToggle(id)}
-                              className="mt-0.5 h-4 w-4 shrink-0 rounded border-line-strong accent-accent"
+                              disabled={locked}
+                              className="mt-0.5 h-4 w-4 shrink-0 rounded border-line-strong accent-accent disabled:opacity-40"
                             />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-2">
@@ -768,7 +831,8 @@ function GradingPanel({
                                 onChange={(e) => onComment(id, e.target.value)}
                                 placeholder="What's right or wrong here…"
                                 rows={2}
-                                className="mt-1.5 w-full resize-y rounded border border-line bg-surface px-2 py-1 text-xs focus:border-accent focus:outline-none"
+                                disabled={locked}
+                                className="mt-1.5 w-full resize-y rounded border border-line bg-surface px-2 py-1 text-xs focus:border-accent focus:outline-none disabled:opacity-60"
                               />
 
                               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -776,27 +840,29 @@ function GradingPanel({
                                   <ReferenceChip
                                     key={ref.id}
                                     reference={ref}
+                                    locked={locked}
                                     onGo={() => onGoToReference(ref)}
                                     onRemove={() => onRemoveReference(id, ref.id)}
                                   />
                                 ))}
-                                {picking ? (
-                                  <button
-                                    type="button"
-                                    onClick={onCancelPicking}
-                                    className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800"
-                                  >
-                                    Click a line… (cancel)
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => onStartPicking(id)}
-                                    className="rounded-full border border-dashed border-line-strong px-2 py-0.5 text-[11px] text-muted hover:border-muted-2 hover:text-ink"
-                                  >
-                                    + Add reference
-                                  </button>
-                                )}
+                                {!locked &&
+                                  (picking ? (
+                                    <button
+                                      type="button"
+                                      onClick={onCancelPicking}
+                                      className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800"
+                                    >
+                                      Click a line… (cancel)
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => onStartPicking(id)}
+                                      className="rounded-full border border-dashed border-line-strong px-2 py-0.5 text-[11px] text-muted hover:border-muted-2 hover:text-ink"
+                                    >
+                                      + Add reference
+                                    </button>
+                                  ))}
                               </div>
                             </div>
                           </div>
@@ -820,10 +886,12 @@ function fmtPts(n: number): string {
 
 function ReferenceChip({
   reference,
+  locked,
   onGo,
   onRemove,
 }: {
   reference: CodeReference;
+  locked: boolean;
   onGo: () => void;
   onRemove: () => void;
 }) {
@@ -833,14 +901,16 @@ function ReferenceChip({
       <button type="button" onClick={onGo} title={reference.file} className="hover:underline">
         {fileName}:{reference.line}
       </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label="Remove reference"
-        className="rounded-full px-1 text-muted-2 hover:bg-line-strong hover:text-ink"
-      >
-        ×
-      </button>
+      {!locked && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove reference"
+          className="rounded-full px-1 text-muted-2 hover:bg-line-strong hover:text-ink"
+        >
+          ×
+        </button>
+      )}
     </span>
   );
 }

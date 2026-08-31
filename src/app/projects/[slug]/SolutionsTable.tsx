@@ -51,6 +51,8 @@ export interface SolutionRow {
   grade: { checked: number; total: number } | null;
   /** Whether any grading (autograde or manual) has ever been saved for this solution. */
   graded: boolean;
+  /** Manually marked as finalized - blocks further grading until unlocked. */
+  locked: boolean;
 }
 
 export function SolutionsTable({
@@ -87,6 +89,7 @@ export function SolutionsTable({
   const effectiveLanguage = (language === CUSTOM_LANGUAGE ? customLanguage : language).trim();
   const selectAllRef = useRef<HTMLInputElement>(null);
   const [sort, setSort] = useState<{ column: "group" | "grade"; dir: "asc" | "desc" } | null>(null);
+  const selectableCount = solutions.filter((s) => !s.locked).length;
 
   // Ungrouped/ungraded solutions always sort last, regardless of direction;
   // ties fall back to the label so the order stays stable rather than
@@ -126,9 +129,9 @@ export function SolutionsTable({
 
   useEffect(() => {
     if (selectAllRef.current) {
-      selectAllRef.current.indeterminate = selected.size > 0 && selected.size < solutions.length;
+      selectAllRef.current.indeterminate = selected.size > 0 && selected.size < selectableCount;
     }
-  }, [selected, solutions.length]);
+  }, [selected, selectableCount]);
 
   useEffect(() => {
     if (!hasAiGatewayKey) return;
@@ -199,7 +202,8 @@ export function SolutionsTable({
   }
 
   function toggleAll() {
-    setSelected((prev) => (prev.size === solutions.length ? new Set() : new Set(solutions.map((s) => s.id))));
+    const selectable = solutions.filter((s) => !s.locked);
+    setSelected((prev) => (prev.size === selectable.length ? new Set() : new Set(selectable.map((s) => s.id))));
   }
 
   async function runAutograde() {
@@ -265,7 +269,7 @@ export function SolutionsTable({
   const jobTotal = job?.items.length ?? 0;
   const settledCount = job?.items.filter((i) => i.status !== "pending" && i.status !== "running").length ?? 0;
   const erroredItems = job?.items.filter((i) => i.status === "error") ?? [];
-  const allSelected = solutions.length > 0 && selected.size === solutions.length;
+  const allSelected = selectableCount > 0 && selected.size === selectableCount;
   // Every solution is graded against the same key, so `total` (max points)
   // is identical across graded rows - summing it across solutions would be
   // meaningless, so this is an average score, not a running total. Filtered
@@ -459,15 +463,21 @@ export function SolutionsTable({
                 const jobItem = job?.items.find((i) => i.solutionId === solution.id);
                 const status = gradingStatus(solution.graded, jobItem);
                 return (
-                  <tr key={solution.id} className="border-b border-line last:border-0 hover:bg-surface-2">
+                  <tr key={solution.id} className={`border-b border-line last:border-0 hover:bg-surface-2 ${solution.locked ? "bg-surface-2/60" : ""}`}>
                     <td className="py-2 pr-2">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(solution.id)}
-                        onChange={() => toggleOne(solution.id)}
-                        aria-label={`Select ${solution.label}`}
-                        className="rounded border-line-strong accent-accent"
-                      />
+                      {solution.locked ? (
+                        <span title="Locked - finalized" aria-label="Locked" className="text-accent">
+                          🔒
+                        </span>
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked={selected.has(solution.id)}
+                          onChange={() => toggleOne(solution.id)}
+                          aria-label={`Select ${solution.label}`}
+                          className="rounded border-line-strong accent-accent"
+                        />
+                      )}
                     </td>
                     <td className="py-2 pr-4">
                       <Link href={`/projects/${slug}/solutions/${solution.id}`} className="text-ink hover:text-accent hover:underline">

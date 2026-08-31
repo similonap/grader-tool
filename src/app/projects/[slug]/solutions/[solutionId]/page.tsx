@@ -82,6 +82,7 @@ export default async function SolutionDiffPage({
           hasAiGatewayKey={aiGatewayConfigured}
           initialModel={project.lastAutogradeModel ?? null}
           initialLanguage={project.lastAutogradeLanguage ?? null}
+          initialLocked={solution.locked ?? false}
         />
       </div>
     </div>

@@ -56,6 +56,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
           uploadedAtLabel: formatDate(solution.uploadedAt),
           grade,
           graded,
+          locked: solution.locked ?? false,
         };
       })
   );

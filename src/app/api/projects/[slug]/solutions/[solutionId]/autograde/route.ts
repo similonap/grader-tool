@@ -31,6 +31,9 @@ export async function POST(
   if (!solution) {
     return NextResponse.json({ error: "Unknown solution." }, { status: 404 });
   }
+  if (solution.locked) {
+    return NextResponse.json({ error: "This solution is locked. Unlock it first." }, { status: 409 });
+  }
 
   const body = await request.json().catch(() => null) as { model?: unknown; language?: unknown } | null;
   const modelId = body?.model;

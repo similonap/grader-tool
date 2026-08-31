@@ -104,7 +104,10 @@ export async function startBulkAutograde(input: StartBulkAutogradeInput): Promis
     }
 
     const wantedIds = new Set(solutionIds);
-    const solutions = (await listSolutions(slug)).filter((s) => wantedIds.has(s.id));
+    // Locked solutions are excluded even if their id was passed in - the
+    // solutions table already prevents selecting them, this is the
+    // server-side backstop.
+    const solutions = (await listSolutions(slug)).filter((s) => wantedIds.has(s.id) && !s.locked);
     if (solutions.length === 0) throw new Error("No solutions selected.");
 
     await saveLastAutogradeSettings(slug, model, language);

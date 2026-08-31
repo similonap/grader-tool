@@ -385,6 +385,18 @@ export async function updateSolutionGroup(slug: string, solutionId: string, grou
   return solution;
 }
 
+/** Locks or unlocks a solution against further grading (autograde and manual). */
+export async function setSolutionLocked(slug: string, solutionId: string, locked: boolean): Promise<SolutionMeta | null> {
+  const list = await listSolutions(slug);
+  const solution = list.find((s) => s.id === solutionId);
+  if (!solution) return null;
+
+  if (locked) solution.locked = true;
+  else delete solution.locked;
+  await writeJson(solutionsIndexPath(slug), list);
+  return solution;
+}
+
 /** Deletes the given solutions (diff, saved grading, and index entry). Returns how many were actually found and removed. */
 export async function deleteSolutions(slug: string, solutionIds: string[]): Promise<number> {
   const wanted = new Set(solutionIds);

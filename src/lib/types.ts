@@ -31,6 +31,8 @@ export interface SolutionMeta {
   uploadedAt: string;
   /** Path (relative to the project dir) of this solution's stored record (diff + grading, combined). */
   diffRelPath: string;
+  /** Manually marked as finalized - blocks further grading (autograde and manual) until unlocked. */
+  locked?: boolean;
 }
 
 export type FileStatus = "added" | "removed" | "modified" | "unchanged";

@@ -55,19 +55,11 @@ export default async function SolutionDiffPage({
       </p>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold text-ink">{solution.label}</h1>
-        <div className="flex items-center gap-3">
-          <div className="flex gap-2 font-mono text-xs">
-            <Badge color="green" label={`${counts.added} added`} />
-            <Badge color="amber" label={`${counts.modified} modified`} />
-            <Badge color="red" label={`${counts.removed} removed`} />
-            <Badge color="zinc" label={`${counts.unchanged} unchanged`} />
-          </div>
-          <Link
-            href={`/projects/${slug}/solutions/${solutionId}/report`}
-            className="rounded-md border border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:border-muted-2 hover:text-ink"
-          >
-            View report
-          </Link>
+        <div className="flex gap-2 font-mono text-xs">
+          <Badge color="green" label={`${counts.added} added`} />
+          <Badge color="amber" label={`${counts.modified} modified`} />
+          <Badge color="red" label={`${counts.removed} removed`} />
+          <Badge color="zinc" label={`${counts.unchanged} unchanged`} />
         </div>
       </div>
       {solution.group && <p className="mt-1 text-sm text-muted">Group: {solution.group}</p>}

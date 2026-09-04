@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import Link from "next/link";
 import type { GatewayModelOption } from "@/lib/aiGateway";
 import type { DiffLine } from "@/lib/diff";
@@ -75,6 +84,19 @@ function newId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// Width (px) of the grading panel column on xl screens. User-resizable via the
+// drag handle, persisted to localStorage so it sticks between solutions.
+const RIGHT_PANE_MIN = 320;
+const RIGHT_PANE_MAX = 780;
+const RIGHT_PANE_DEFAULT = 380;
+// Persisted workspace layout: right-pane width + collapsed state of the two
+// left columns.
+const WORKSPACE_UI_STORAGE_KEY = "grader:solution-workspace-ui";
+
+function clampRightPane(width: number): number {
+  return Math.min(RIGHT_PANE_MAX, Math.max(RIGHT_PANE_MIN, Math.round(width)));
+}
+
 interface DiffResponse {
   path: string;
   binary: boolean;
@@ -124,6 +146,74 @@ export function SolutionWorkspace({
   const [pickingForCriterion, setPickingForCriterion] = useState<string | null>(null);
   const [grading, setGrading] = useState<SolutionGrading>(initialGrading);
   const diffContainerRef = useRef<HTMLDivElement>(null);
+
+  const [rightPaneWidth, setRightPaneWidth] = useState(RIGHT_PANE_DEFAULT);
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
+  const [diffCollapsed, setDiffCollapsed] = useState(false);
+  const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    // Restore the persisted layout after mount (not in a lazy initializer) so
+    // the server and first client render agree, then reconcile once on the client.
+    const raw = window.localStorage.getItem(WORKSPACE_UI_STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw) as Partial<{
+        rightPaneWidth: number;
+        treeCollapsed: boolean;
+        diffCollapsed: boolean;
+      }>;
+      /* eslint-disable react-hooks/set-state-in-effect */
+      if (typeof saved.rightPaneWidth === "number") setRightPaneWidth(clampRightPane(saved.rightPaneWidth));
+      if (typeof saved.treeCollapsed === "boolean") setTreeCollapsed(saved.treeCollapsed);
+      if (typeof saved.diffCollapsed === "boolean") setDiffCollapsed(saved.diffCollapsed);
+      /* eslint-enable react-hooks/set-state-in-effect */
+    } catch {
+      // Ignore malformed storage - fall back to defaults.
+    }
+  }, []);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      window.localStorage.setItem(
+        WORKSPACE_UI_STORAGE_KEY,
+        JSON.stringify({ rightPaneWidth, treeCollapsed, diffCollapsed })
+      );
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [rightPaneWidth, treeCollapsed, diffCollapsed]);
+
+  const onResizeMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    const state = resizeStateRef.current;
+    if (!state) return;
+    // Dragging left (negative delta) widens the panel.
+    setRightPaneWidth(clampRightPane(state.startWidth - (e.clientX - state.startX)));
+  }, []);
+
+  const endResize = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!resizeStateRef.current) return;
+    resizeStateRef.current = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+  }, []);
+
+  const onResizeStart = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      resizeStateRef.current = { startX: e.clientX, startWidth: rightPaneWidth };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "col-resize";
+    },
+    [rightPaneWidth]
+  );
+
+  const nudgeRightPane = useCallback((e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    setRightPaneWidth((w) => clampRightPane(w + (e.key === "ArrowLeft" ? 16 : -16)));
+  }, []);
 
   const [gatewayModels, setGatewayModels] = useState<GatewayModelOption[] | null>(null);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -355,74 +445,135 @@ export function SolutionWorkspace({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)_380px]">
-      <aside className="rounded-2xl border border-line bg-surface p-2 shadow-[var(--shadow)] xl:max-h-[calc(100vh-12rem)] xl:overflow-auto">
-        {unchangedCount > 0 && (
-          <label className="mb-1 flex items-center gap-2 border-b border-line px-2 pb-2 text-xs text-muted">
-            <input
-              type="checkbox"
-              checked={showUnchanged}
-              onChange={(e) => setShowUnchanged(e.target.checked)}
-              className="rounded border-line-strong accent-accent"
-            />
-            Show {unchangedCount} unchanged file{unchangedCount === 1 ? "" : "s"}
-          </label>
-        )}
-        {tree.length === 0 ? (
-          <p className="px-2 py-1 text-xs text-muted">No changed files.</p>
-        ) : (
-          <FileTree nodes={tree} selectedPath={selected?.path ?? null} onSelect={selectFileFromTree} />
-        )}
-      </aside>
+    <div
+      className="grid grid-cols-1 gap-4 xl:grid-cols-[var(--tree-col)_var(--center-col)_var(--right-col)]"
+      style={
+        {
+          "--tree-col": treeCollapsed ? "2.5rem" : "240px",
+          "--center-col": diffCollapsed ? "2.5rem" : "minmax(0,1fr)",
+          "--right-col": diffCollapsed ? "minmax(0,1fr)" : `${rightPaneWidth}px`,
+        } as CSSProperties
+      }
+    >
+      {treeCollapsed ? (
+        <CollapsedRail label="Files" onExpand={() => setTreeCollapsed(false)} />
+      ) : (
+        <aside className="rounded-2xl border border-line bg-surface p-2 shadow-[var(--shadow)] xl:max-h-[calc(100vh-12rem)] xl:overflow-auto">
+          <div className="mb-1 flex items-center justify-between gap-2 border-b border-line px-1 pb-1.5">
+            <span className="px-1 font-mono text-[11px] uppercase tracking-wide text-muted-2">Files</span>
+            <button
+              type="button"
+              onClick={() => setTreeCollapsed(true)}
+              aria-label="Collapse file tree"
+              title="Collapse file tree"
+              className="rounded px-1.5 py-0.5 text-sm leading-none text-muted-2 hover:bg-surface-2 hover:text-ink"
+            >
+              «
+            </button>
+          </div>
+          {unchangedCount > 0 && (
+            <label className="mb-1 flex items-center gap-2 border-b border-line px-2 pb-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={showUnchanged}
+                onChange={(e) => setShowUnchanged(e.target.checked)}
+                className="rounded border-line-strong accent-accent"
+              />
+              Show {unchangedCount} unchanged file{unchangedCount === 1 ? "" : "s"}
+            </label>
+          )}
+          {tree.length === 0 ? (
+            <p className="px-2 py-1 text-xs text-muted">No changed files.</p>
+          ) : (
+            <FileTree nodes={tree} selectedPath={selected?.path ?? null} onSelect={selectFileFromTree} />
+          )}
+        </aside>
+      )}
 
-      <section className="min-w-0 rounded-2xl border border-line bg-surface shadow-[var(--shadow)]">
-        {!selected ? (
-          <p className="p-6 text-sm text-muted">No files found.</p>
-        ) : (
-          <>
-            <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-              <code className="text-sm">{selected.path}</code>
-              <span className={`text-xs font-medium ${STATUS_TEXT[selected.status]}`}>{selected.status}</span>
-            </div>
+      {diffCollapsed ? (
+        <CollapsedRail label="Diff" onExpand={() => setDiffCollapsed(false)} />
+      ) : (
+        <section className="relative flex min-w-0 flex-col rounded-2xl border border-line bg-surface shadow-[var(--shadow)]">
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize grading panel"
+            tabIndex={0}
+            onPointerDown={onResizeStart}
+            onPointerMove={onResizeMove}
+            onPointerUp={endResize}
+            onPointerCancel={endResize}
+            onKeyDown={nudgeRightPane}
+            className="group absolute -right-4 top-0 z-10 hidden h-full w-4 cursor-col-resize touch-none xl:block"
+          >
+            <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line transition-colors group-hover:bg-accent group-focus-visible:bg-accent" />
+          </div>
 
-            {pickingForCriterion && (
-              <div className="flex items-center justify-between gap-3 border-b border-accent/30 bg-accent-soft px-4 py-2 text-xs text-accent-ink">
-                <span>
-                  Click a line to reference it from{" "}
-                  <strong>&ldquo;{criteriaIndex.get(pickingForCriterion) ?? pickingForCriterion}&rdquo;</strong>
-                </span>
-                <button type="button" onClick={() => setPickingForCriterion(null)} className="shrink-0 underline">
-                  Cancel
-                </button>
-              </div>
-            )}
-
-            <div ref={diffContainerRef} className="overflow-auto xl:max-h-[calc(100vh-12rem)]">
-              {selected.status === "unchanged" ? (
-                <p className="p-6 text-sm text-muted">No changes in this file.</p>
-              ) : loading || !diff ? (
-                <p className="p-6 text-sm text-muted">Loading diff…</p>
-              ) : diff.error ? (
-                <p className="p-6 text-sm text-red-600">{diff.error}</p>
-              ) : diff.binary ? (
-                <p className="p-6 text-sm text-muted">
-                  Binary file changed{" "}
-                  {typeof diff.oldSize === "number" && typeof diff.newSize === "number"
-                    ? `(${diff.oldSize} → ${diff.newSize} bytes)`
-                    : ""}
-                </p>
+          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDiffCollapsed(true)}
+                aria-label="Collapse diff"
+                title="Collapse diff"
+                className="shrink-0 rounded px-1.5 py-0.5 text-sm leading-none text-muted-2 hover:bg-surface-2 hover:text-ink"
+              >
+                «
+              </button>
+              {selected ? (
+                <code className="truncate text-sm">{selected.path}</code>
               ) : (
-                <DiffTable
-                  lines={diff.lines ?? []}
-                  picking={!!pickingForCriterion}
-                  highlightIndex={highlightIndex}
-                  onPickLine={handlePickLine}
-                />
+                <span className="text-sm text-muted">No file selected</span>
               )}
             </div>
-          </>
-        )}
-      </section>
+            {selected && (
+              <span className={`shrink-0 text-xs font-medium ${STATUS_TEXT[selected.status]}`}>{selected.status}</span>
+            )}
+          </div>
+
+          {!selected ? (
+            <p className="p-6 text-sm text-muted">No files found.</p>
+          ) : (
+            <>
+              {pickingForCriterion && (
+                <div className="flex items-center justify-between gap-3 border-b border-accent/30 bg-accent-soft px-4 py-2 text-xs text-accent-ink">
+                  <span>
+                    Click a line to reference it from{" "}
+                    <strong>&ldquo;{criteriaIndex.get(pickingForCriterion) ?? pickingForCriterion}&rdquo;</strong>
+                  </span>
+                  <button type="button" onClick={() => setPickingForCriterion(null)} className="shrink-0 underline">
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              <div ref={diffContainerRef} className="overflow-auto xl:max-h-[calc(100vh-12rem)]">
+                {selected.status === "unchanged" ? (
+                  <p className="p-6 text-sm text-muted">No changes in this file.</p>
+                ) : loading || !diff ? (
+                  <p className="p-6 text-sm text-muted">Loading diff…</p>
+                ) : diff.error ? (
+                  <p className="p-6 text-sm text-red-600">{diff.error}</p>
+                ) : diff.binary ? (
+                  <p className="p-6 text-sm text-muted">
+                    Binary file changed{" "}
+                    {typeof diff.oldSize === "number" && typeof diff.newSize === "number"
+                      ? `(${diff.oldSize} → ${diff.newSize} bytes)`
+                      : ""}
+                  </p>
+                ) : (
+                  <DiffTable
+                    lines={diff.lines ?? []}
+                    picking={!!pickingForCriterion}
+                    highlightIndex={highlightIndex}
+                    onPickLine={handlePickLine}
+                  />
+                )}
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       <aside className="xl:max-h-[calc(100vh-12rem)] xl:overflow-auto">
         <GradingPanel
@@ -453,6 +604,23 @@ export function SolutionWorkspace({
           onRunAutograde={runAutograde}
         />
       </aside>
+    </div>
+  );
+}
+
+function CollapsedRail({ label, onExpand }: { label: string; onExpand: () => void }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface shadow-[var(--shadow)] xl:h-full xl:max-h-[calc(100vh-12rem)]">
+      <button
+        type="button"
+        onClick={onExpand}
+        aria-label={`Expand ${label}`}
+        title={`Expand ${label}`}
+        className="flex w-full items-center justify-center gap-2 px-2 py-2.5 text-xs font-medium text-muted-2 hover:bg-surface-2 hover:text-ink xl:h-full xl:flex-col"
+      >
+        <span aria-hidden>»</span>
+        <span className="uppercase tracking-wide xl:[writing-mode:vertical-rl]">{label}</span>
+      </button>
     </div>
   );
 }
@@ -676,7 +844,8 @@ function GradingPanel({
         </button>
       </div>
 
-      <div className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
+      {!locked && (
+        <div className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
         <h2 className="font-display text-lg font-semibold text-ink">Autograde with AI</h2>
         {!hasAiGatewayKey ? (
           <p className="mt-1 text-xs text-muted">
@@ -748,13 +917,14 @@ function GradingPanel({
             {autogradeError && <p className="text-xs text-red-600">{autogradeError}</p>}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold text-ink">Manual grading</h2>
           {total > 0 && (
-            <span className="rounded-md bg-accent-soft px-2 py-0.5 font-mono text-xs font-semibold text-accent-ink">
+            <span className={`rounded-md px-2 py-0.5 font-mono text-xs font-semibold ${scoreBadgeColor(checked, total)}`}>
               {checked} / {total} pts
             </span>
           )}
@@ -791,7 +961,12 @@ function GradingPanel({
                 <details key={section.id ?? si} open>
                   <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-2.5 font-display text-sm font-semibold text-ink">
                     {section.title ?? `Section ${si + 1}`}
-                    <span className="rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-normal text-muted">
+                    <span
+                      className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] font-semibold ${scoreBadgeColor(
+                        sectionChecked,
+                        sectionPoints
+                      )}`}
+                    >
                       {fmtPts(sectionChecked)} / {fmtPts(sectionPoints)} pts
                     </span>
                   </summary>
@@ -882,6 +1057,13 @@ function GradingPanel({
 
 function fmtPts(n: number): string {
   return (Math.round(n * 100) / 100).toString();
+}
+
+// Score pill colour: green once the solution has 50% or more of the points.
+function scoreBadgeColor(checked: number, total: number): string {
+  return total > 0 && checked / total >= 0.5
+    ? "bg-emerald-50 text-emerald-700"
+    : "bg-accent-soft text-accent-ink";
 }
 
 function ReferenceChip({

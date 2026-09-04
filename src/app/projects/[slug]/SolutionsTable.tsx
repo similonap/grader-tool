@@ -479,11 +479,7 @@ export function SolutionsTable({
                         />
                       )}
                     </td>
-                    <td className="py-2 pr-4">
-                      <Link href={`/projects/${slug}/solutions/${solution.id}`} className="text-ink hover:text-accent hover:underline">
-                        {solution.label}
-                      </Link>
-                    </td>
+                    <td className="py-2 pr-4 text-ink">{solution.label}</td>
                     <td className="py-2 pr-4">
                       <GroupCell
                         key={`${solution.id}:${solution.group ?? ""}`}
@@ -494,7 +490,7 @@ export function SolutionsTable({
                     </td>
                     <td className="py-2 pr-4">
                       {solution.grade && solution.graded ? (
-                        <span className="rounded-md bg-accent-soft px-1.5 py-0.5 font-mono text-xs font-semibold text-accent-ink">
+                        <span className={scoreBadgeClass(solution.grade.checked, solution.grade.total)}>
                           {solution.grade.checked} / {solution.grade.total} pts
                         </span>
                       ) : (
@@ -505,12 +501,12 @@ export function SolutionsTable({
                     <td className="py-2 pr-2">
                       <span className={status.color}>{status.label}</span>
                     </td>
-                    <td className="py-2 pr-2">
+                    <td className="py-2 pr-2 text-right">
                       <Link
-                        href={`/projects/${slug}/solutions/${solution.id}/report`}
-                        className="rounded-md border border-line-strong px-2 py-1 text-xs font-medium text-muted hover:border-muted-2 hover:text-ink"
+                        href={`/projects/${slug}/solutions/${solution.id}`}
+                        className="inline-block rounded-md border border-line-strong px-2 py-1 text-xs font-medium text-muted hover:border-muted-2 hover:text-ink"
                       >
-                        Report
+                        Open
                       </Link>
                     </td>
                   </tr>
@@ -525,7 +521,7 @@ export function SolutionsTable({
                     Average ({gradedSolutions.length} graded)
                   </td>
                   <td className="py-2 pr-4">
-                    <span className="rounded-md bg-accent-soft px-1.5 py-0.5 font-mono text-xs font-semibold text-accent-ink">
+                    <span className={scoreBadgeClass(averageRow.avgChecked, averageRow.total)}>
                       {fmtPts(averageRow.avgChecked)} / {fmtPts(averageRow.total)} pts (
                       {averageRow.total > 0 ? Math.round((averageRow.avgChecked / averageRow.total) * 100) : 0}%)
                     </span>
@@ -564,6 +560,14 @@ function SortButton({
 
 function fmtPts(n: number): string {
   return (Math.round(n * 100) / 100).toString();
+}
+
+// Score pill: green once the student has 50% or more of the available points.
+function scoreBadgeClass(checked: number, total: number): string {
+  const passing = total > 0 && checked / total >= 0.5;
+  return `rounded-md px-1.5 py-0.5 font-mono text-xs font-semibold ${
+    passing ? "bg-emerald-50 text-emerald-700" : "bg-accent-soft text-accent-ink"
+  }`;
 }
 
 function GroupCell({

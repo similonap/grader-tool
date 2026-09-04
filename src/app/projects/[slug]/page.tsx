@@ -4,6 +4,7 @@ import { allCriterionIds, checkedPoints, parseGradingKey, totalPoints } from "@/
 import { hasAiGatewayKey } from "@/lib/settings";
 import { getGradingKeyRaw, getGradingState, getProject, listSolutions } from "@/lib/storage";
 import { DeleteProjectButton } from "./DeleteProjectButton";
+import { ProjectAnalysis } from "./ProjectAnalysis";
 import { ProjectRepoButton } from "./ProjectRepoButton";
 import { PuntenlijstImportButton } from "./PuntenlijstImportButton";
 import type { SolutionRow } from "./SolutionsTable";
@@ -113,6 +114,12 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
           initialLanguage={project.lastAutogradeLanguage ?? null}
         />
       </div>
+
+      {hasStructuredGradingKey && (
+        <div className="mt-6">
+          <ProjectAnalysis slug={slug} />
+        </div>
+      )}
     </div>
   );
 }

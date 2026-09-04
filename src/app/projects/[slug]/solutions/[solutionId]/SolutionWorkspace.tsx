@@ -14,7 +14,7 @@ import Link from "next/link";
 import type { GatewayModelOption } from "@/lib/aiGateway";
 import type { DiffLine } from "@/lib/diff";
 import { CUSTOM_LANGUAGE, FEEDBACK_LANGUAGES, resolveInitialLanguage } from "@/lib/feedbackLanguages";
-import { criterionId, totalPoints, type GradingKeyDoc } from "@/lib/gradingKey";
+import { checkedPoints, criterionId, totalPoints, type GradingKeyDoc } from "@/lib/gradingKey";
 import type { CodeReference, CriterionGrade, FileDiffEntry, FileStatus, SolutionGrading } from "@/lib/types";
 
 interface TreeNode {
@@ -109,6 +109,8 @@ interface DiffResponse {
 export function SolutionWorkspace({
   slug,
   solutionId,
+  solutionLabel,
+  solutionGroup,
   entries,
   gradingKey,
   initialGrading,
@@ -119,6 +121,8 @@ export function SolutionWorkspace({
 }: {
   slug: string;
   solutionId: string;
+  solutionLabel: string;
+  solutionGroup: string | null;
   entries: FileDiffEntry[];
   gradingKey: GradingKeyDoc | null;
   initialGrading: SolutionGrading;
@@ -146,6 +150,22 @@ export function SolutionWorkspace({
   const [pickingForCriterion, setPickingForCriterion] = useState<string | null>(null);
   const [grading, setGrading] = useState<SolutionGrading>(initialGrading);
   const diffContainerRef = useRef<HTMLDivElement>(null);
+
+  const diffCounts = useMemo(
+    () =>
+      entries.reduce(
+        (acc, e) => {
+          acc[e.status] += 1;
+          return acc;
+        },
+        { added: 0, removed: 0, modified: 0, unchanged: 0 }
+      ),
+    [entries]
+  );
+
+  const totalScore = totalPoints(gradingKey);
+  const checkedScore = checkedPoints(gradingKey, grading.criteria);
+  const scoreOn20 = totalScore > 0 ? (checkedScore / totalScore) * 20 : 0;
 
   const [rightPaneWidth, setRightPaneWidth] = useState(RIGHT_PANE_DEFAULT);
   const [treeCollapsed, setTreeCollapsed] = useState(false);
@@ -445,16 +465,38 @@ export function SolutionWorkspace({
   }
 
   return (
-    <div
-      className="grid grid-cols-1 gap-4 xl:grid-cols-[var(--tree-col)_var(--center-col)_var(--right-col)]"
-      style={
-        {
-          "--tree-col": treeCollapsed ? "2.5rem" : "240px",
-          "--center-col": diffCollapsed ? "2.5rem" : "minmax(0,1fr)",
-          "--right-col": diffCollapsed ? "minmax(0,1fr)" : `${rightPaneWidth}px`,
-        } as CSSProperties
-      }
-    >
+    <div>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="font-display text-2xl font-semibold text-ink">{solutionLabel}</h1>
+          {totalScore > 0 && (
+            <span
+              className={`rounded-md px-2.5 py-1 font-mono text-sm font-semibold ${scoreBadgeColor(checkedScore, totalScore)}`}
+            >
+              {fmtPts(checkedScore)} / {fmtPts(totalScore)} pts
+              <span className="ml-1.5 opacity-70">· {fmtPts(scoreOn20)} / 20</span>
+            </span>
+          )}
+          {solutionGroup && <span className="text-sm text-muted">Group: {solutionGroup}</span>}
+        </div>
+        <div className="flex gap-2 font-mono text-xs">
+          <CountBadge tone="green" label={`${diffCounts.added} added`} />
+          <CountBadge tone="amber" label={`${diffCounts.modified} modified`} />
+          <CountBadge tone="red" label={`${diffCounts.removed} removed`} />
+          <CountBadge tone="zinc" label={`${diffCounts.unchanged} unchanged`} />
+        </div>
+      </div>
+
+      <div
+        className="grid grid-cols-1 gap-4 xl:grid-cols-[var(--tree-col)_var(--center-col)_var(--right-col)]"
+        style={
+          {
+            "--tree-col": treeCollapsed ? "2.5rem" : "240px",
+            "--center-col": diffCollapsed ? "2.5rem" : "minmax(0,1fr)",
+            "--right-col": diffCollapsed ? "minmax(0,1fr)" : `${rightPaneWidth}px`,
+          } as CSSProperties
+        }
+      >
       {treeCollapsed ? (
         <CollapsedRail label="Files" onExpand={() => setTreeCollapsed(false)} />
       ) : (
@@ -604,8 +646,19 @@ export function SolutionWorkspace({
           onRunAutograde={runAutograde}
         />
       </aside>
+      </div>
     </div>
   );
+}
+
+function CountBadge({ tone, label }: { tone: "green" | "amber" | "red" | "zinc"; label: string }) {
+  const toneClasses = {
+    green: "bg-emerald-50 text-emerald-700",
+    amber: "bg-amber-50 text-amber-700",
+    red: "bg-red-50 text-red-700",
+    zinc: "bg-surface-2 text-muted",
+  }[tone];
+  return <span className={`rounded-md px-2.5 py-1 font-medium ${toneClasses}`}>{label}</span>;
 }
 
 function CollapsedRail({ label, onExpand }: { label: string; onExpand: () => void }) {
@@ -806,15 +859,6 @@ function GradingPanel({
   autogradeError: string | null;
   onRunAutograde: () => void;
 }) {
-  const total = totalPoints(gradingKey);
-  let checked = 0;
-  gradingKey?.sections?.forEach((section, si) => {
-    (section.criteria ?? []).forEach((c, ci) => {
-      const id = criterionId(section, si, c, ci);
-      if (grading.criteria[id]?.checked) checked += c.points ?? 0;
-    });
-  });
-
   return (
     <div className="space-y-4">
       <div
@@ -921,14 +965,7 @@ function GradingPanel({
       )}
 
       <div className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">Manual grading</h2>
-          {total > 0 && (
-            <span className={`rounded-md px-2 py-0.5 font-mono text-xs font-semibold ${scoreBadgeColor(checked, total)}`}>
-              {checked} / {total} pts
-            </span>
-          )}
-        </div>
+        <h2 className="font-display text-lg font-semibold text-ink">Manual grading</h2>
         <p className="mt-0.5 text-xs text-muted-2">Autosaves as you edit.</p>
 
         <textarea

@@ -2,8 +2,19 @@
 
 import { useState, type FormEvent } from "react";
 
-export function SettingsForm({ initiallyConfigured }: { initiallyConfigured: boolean }) {
+type Provider = "gateway" | "claude-cli";
+
+export function SettingsForm({
+  initiallyConfigured,
+  initialProvider,
+  cliAvailable,
+}: {
+  initiallyConfigured: boolean;
+  initialProvider: Provider;
+  cliAvailable: boolean;
+}) {
   const [configured, setConfigured] = useState(initiallyConfigured);
+  const [provider, setProvider] = useState<Provider>(initialProvider);
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -32,6 +43,28 @@ export function SettingsForm({ initiallyConfigured }: { initiallyConfigured: boo
     }
   }
 
+  async function chooseProvider(next: Provider) {
+    if (next === provider) return;
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aiProvider: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save.");
+      setProvider(data.aiProvider);
+      setMessage("AI provider updated.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!key.trim()) return;
@@ -40,7 +73,45 @@ export function SettingsForm({ initiallyConfigured }: { initiallyConfigured: boo
 
   return (
     <div className="space-y-4">
-      <div>
+      <fieldset className="space-y-2" disabled={saving}>
+        <legend className="text-sm font-medium text-ink">AI provider</legend>
+        <label className="flex items-start gap-2 text-sm text-ink">
+          <input
+            type="radio"
+            name="aiProvider"
+            checked={provider === "gateway"}
+            onChange={() => chooseProvider("gateway")}
+            className="mt-1"
+          />
+          <span>
+            Vercel AI Gateway
+            <span className="block text-xs text-muted">Uses the API key below; any model on the Gateway.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-sm text-ink">
+          <input
+            type="radio"
+            name="aiProvider"
+            checked={provider === "claude-cli"}
+            onChange={() => chooseProvider("claude-cli")}
+            className="mt-1"
+          />
+          <span>
+            Claude subscription of this machine
+            <span className="block text-xs text-muted">
+              Runs the local <code>claude</code> CLI, billed to the account it is logged in with (
+              <code>claude login</code>). Opus, Sonnet or Haiku.
+            </span>
+            {!cliAvailable && (
+              <span className="block text-xs text-red-600">
+                The <code>claude</code> CLI was not found on this machine.
+              </span>
+            )}
+          </span>
+        </label>
+      </fieldset>
+
+      <div className={provider === "claude-cli" ? "opacity-50" : undefined}>
         <label htmlFor="aiGatewayKey" className="block text-sm font-medium text-ink">
           Vercel AI Gateway API key
         </label>

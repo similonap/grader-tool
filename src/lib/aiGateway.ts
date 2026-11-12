@@ -2,11 +2,17 @@ import { GatewayAuthenticationError, createGateway } from "@ai-sdk/gateway";
 import { AISDKError, APICallError, NoObjectGeneratedError, generateObject } from "ai";
 import { z } from "zod";
 import { allCriterionIds, criterionId, type GradingKeyDoc } from "./gradingKey";
+import { CLAUDE_CLI_MODELS, generateObjectWithClaudeCli } from "./claudeCli";
+import type { AiAccess } from "./settings";
 import type { CodeReference, CriterionGrade, StoredFileDiff } from "./types";
 
 export interface GatewayModelOption {
   id: string;
   name: string;
+}
+
+export async function listModels(access: AiAccess): Promise<GatewayModelOption[]> {
+  return access.provider === "claude-cli" ? CLAUDE_CLI_MODELS : listGatewayModels(access.apiKey);
 }
 
 export async function listGatewayModels(apiKey: string): Promise<GatewayModelOption[]> {
@@ -34,14 +40,37 @@ const NOISE_FILE_PATTERNS = [
   /(^|\/)Gemfile\.lock$/,
   /(^|\/)poetry\.lock$/,
   /(^|\/)Cargo\.lock$/,
+  // Dependency/build output directories.
+  /(^|\/)(node_modules|dist|build|\.next|coverage)\//,
+  // Images, fonts and other assets: no grading signal, often huge as text.
+  /\.(svg|png|jpe?g|gif|webp|ico|bmp|woff2?|ttf|otf|eot|map)$/i,
+  /\.min\.(js|css)$/i,
 ];
 
 function isNoiseFile(path: string): boolean {
   return NOISE_FILE_PATTERNS.some((re) => re.test(path));
 }
 
+// Lower number = included first when the budget is tight.
+function filePriority(f: StoredFileDiff): number {
+  // Deleted files (e.g. the starter after a student moved the project into a
+  // subfolder) say little about what the student built.
+  if (f.status === "removed") return 4;
+  if (/\.(tsx?|jsx?|vue|svelte|py|java|cs|php|rb|go|rs|html)$/i.test(f.path)) {
+    return /(^|\/)(tsconfig[^/]*|vite\.config|[^/]*\.config)\.[jt]s(on)?$/i.test(f.path) ? 2 : 0;
+  }
+  if (/(^|\/)package\.json$/.test(f.path)) return 1;
+  if (/\.css$|\.scss$/i.test(f.path)) return 2;
+  return 3;
+}
+
 function buildDiffText(files: StoredFileDiff[]): { text: string; truncated: boolean; omittedFiles: string[] } {
-  const changed = files.filter((f) => f.status !== "unchanged" && !isNoiseFile(f.path));
+  // Stable sort: priority first, original (path) order within a priority.
+  const changed = files
+    .filter((f) => f.status !== "unchanged" && !isNoiseFile(f.path))
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => filePriority(a.f) - filePriority(b.f) || a.i - b.i)
+    .map(({ f }) => f);
   const chunks: string[] = [];
   const omittedFiles: string[] = [];
   let used = 0;
@@ -102,7 +131,7 @@ const autogradeResponseSchema = z.object({
 });
 
 export interface AutogradeParams {
-  apiKey: string;
+  access: AiAccess;
   modelId: string;
   gradingKey: GradingKeyDoc;
   files: StoredFileDiff[];
@@ -117,6 +146,23 @@ export interface AutogradeOutcome {
 
 // Strips terminal color codes the Gateway sometimes includes in error text.
 const ANSI_ESCAPE = /\x1b\[[0-9;]*m/g;
+
+// Some models (e.g. certain Anthropic reasoning models on the Gateway)
+// reject a request outright when maxOutputTokens would let the combined
+// output+reasoning budget exceed a per-model ceiling, reported as e.g. "max
+// output tokens plus reasoning effort tokens must be under 21K for
+// anthropic/claude-opus-4.8". Extracts that ceiling (in tokens) so the
+// caller can retry with a budget that actually fits, instead of every
+// request to that model failing outright.
+function parseCombinedTokenLimit(err: unknown): number | null {
+  // Not gated on APICallError.isInstance(err): the Gateway SDK converts a
+  // rejected request's underlying APICallError into a GatewayInvalidRequestError
+  // (extends plain Error, not APICallError) before it reaches this catch block,
+  // so that check never matched and this retry path never ran.
+  if (!(err instanceof Error)) return null;
+  const match = err.message.match(/under (\d+(?:\.\d+)?)K/i);
+  return match ? Math.round(Number(match[1]) * 1000) : null;
+}
 
 function describeGatewayError(err: unknown): string {
   const message = (() => {
@@ -146,10 +192,49 @@ function describeGatewayError(err: unknown): string {
   return message.replace(ANSI_ESCAPE, "").trim();
 }
 
-export async function autogradeSolution(params: AutogradeParams): Promise<AutogradeOutcome> {
-  const { apiKey, modelId, gradingKey, files, language } = params;
-  const validIds = new Set(allCriterionIds(gradingKey));
+async function generateWithGateway(
+  apiKey: string,
+  modelId: string,
+  instructions: string,
+  prompt: string
+): Promise<z.infer<typeof autogradeResponseSchema>> {
   const gatewayClient = createGateway({ apiKey });
+  const buildRequest = (maxOutputTokens: number) => ({
+    model: gatewayClient(modelId),
+    schema: autogradeResponseSchema,
+    instructions,
+    prompt,
+    maxOutputTokens,
+  });
+
+  // Generous headroom: a large grading key's full per-criterion JSON output
+  // alone can run into the thousands of tokens, and reasoning models spend
+  // some of this same budget on hidden reasoning before ever emitting the
+  // response - too low a cap here is the most common cause of "No object
+  // generated: the model did not return a response."
+  let result;
+  try {
+    result = await generateObject(buildRequest(32000));
+  } catch (err) {
+    const combinedLimit = parseCombinedTokenLimit(err);
+    if (combinedLimit == null) throw new Error(describeGatewayError(err));
+
+    // This model caps output+reasoning tokens together below our default -
+    // retry once with a budget that actually fits, leaving headroom for
+    // reasoning tokens we don't control directly.
+    try {
+      result = await generateObject(buildRequest(Math.max(2000, combinedLimit - 4000)));
+    } catch (retryErr) {
+      throw new Error(describeGatewayError(retryErr));
+    }
+  }
+
+  return result.object;
+}
+
+export async function autogradeSolution(params: AutogradeParams): Promise<AutogradeOutcome> {
+  const { access, modelId, gradingKey, files, language } = params;
+  const validIds = new Set(allCriterionIds(gradingKey));
 
   const { text: diffText, truncated, omittedFiles } = buildDiffText(files);
   const gradingKeyText = buildGradingKeyText(gradingKey);
@@ -159,35 +244,26 @@ export async function autogradeSolution(params: AutogradeParams): Promise<Autogr
     gradingKeyText,
     "",
     "# Diff (starter code -> student solution)",
-    "Only files that changed are shown (lockfiles are omitted as noise). Each line is prefixed with a bracketed index like [12] giving its position in this diff listing - it is NOT a source line number (removed lines don't exist in the student's file, so real line numbers would be ambiguous once lines are added or removed).",
+    "Only files that changed are shown (lockfiles, images/SVGs and build output are omitted as noise; source files are listed first). Each line is prefixed with a bracketed index like [12] giving its position in this diff listing - it is NOT a source line number (removed lines don't exist in the student's file, so real line numbers would be ambiguous once lines are added or removed).",
     diffText || "(no changed files)",
     truncated
       ? `\n[omitted for length, too large to include: ${omittedFiles.join(", ")} - do not assume these are unchanged, you simply cannot see them]`
       : "",
   ].join("\n");
 
-  let result;
-  try {
-    result = await generateObject({
-      model: gatewayClient(modelId),
-      schema: autogradeResponseSchema,
-      instructions:
-        "You are grading a student's code submission against the rubric below, using a diff between the starter code they were given and their submission. For every criterion listed in the rubric, decide whether it is satisfied (checked: true) based only on what the diff shows, and write a short comment (1-2 sentences) explaining your judgment either way. When a specific place in the diff supports your judgment, cite it in `references` using the exact file path and the bracketed index shown at the start of that line, e.g. for a line shown as `[42]+ foo` use lineIndex: 42 (at most 2 references per criterion; use an empty array if there's nothing specific to cite). Be conservative: if the diff doesn't show enough to be sure a criterion is met, leave it unchecked and say what's missing. Return one entry in `criteria` for every criterion id in the rubric." +
-        ` Write all free-text fields (\`comment\` and \`overallComment\`) in ${language}, regardless of what language the rubric or the code comments are written in.`,
-      prompt,
-      // Generous headroom: a large grading key's full per-criterion JSON
-      // output alone can run into the thousands of tokens, and reasoning
-      // models spend some of this same budget on hidden reasoning before
-      // ever emitting the response - too low a cap here is the most common
-      // cause of "No object generated: the model did not return a response."
-      maxOutputTokens: 32000,
-    });
-  } catch (err) {
-    throw new Error(describeGatewayError(err));
+  const instructions =
+      "You are grading a student's code submission against the rubric below, using a diff between the starter code they were given and their submission. For every criterion listed in the rubric, decide whether it is satisfied (checked: true) based only on what the diff shows, and write a short comment (1-2 sentences) explaining your judgment either way. When a specific place in the diff supports your judgment, cite it in `references` using the exact file path and the bracketed index shown at the start of that line, e.g. for a line shown as `[42]+ foo` use lineIndex: 42 (at most 2 references per criterion; use an empty array if there's nothing specific to cite). Be conservative: if the diff doesn't show enough to be sure a criterion is met, leave it unchecked and say what's missing. Return one entry in `criteria` for every criterion id in the rubric." +
+      ` Write all free-text fields (\`comment\` and \`overallComment\`) in ${language}, regardless of what language the rubric or the code comments are written in.`;
+
+  let object: z.infer<typeof autogradeResponseSchema>;
+  if (access.provider === "claude-cli") {
+    object = await generateObjectWithClaudeCli({ model: modelId, schema: autogradeResponseSchema, instructions, prompt });
+  } else {
+    object = await generateWithGateway(access.apiKey, modelId, instructions, prompt);
   }
 
   const criteria: Record<string, CriterionGrade> = {};
-  for (const item of result.object.criteria) {
+  for (const item of object.criteria) {
     if (!validIds.has(item.id)) continue;
 
     const references: CodeReference[] = [];
@@ -209,5 +285,5 @@ export async function autogradeSolution(params: AutogradeParams): Promise<Autogr
     criteria[item.id] = { checked: item.checked, comment: item.comment, references };
   }
 
-  return { overallComment: result.object.overallComment, criteria };
+  return { overallComment: object.overallComment, criteria };
 }

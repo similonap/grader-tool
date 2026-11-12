@@ -2,7 +2,23 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { FileDiffEntry, FileStatus } from "./types";
 
-const IGNORED_DIRS = new Set(["node_modules", ".git", ".next", "__pycache__", ".venv", "venv", "dist", "build"]);
+// Non-dot build/dependency dirs that carry no grading signal. Dot-folders
+// (.git, .angular, .next, .vscode, .idea, .cache, ...) and the macOS archive
+// sidecar (__MACOSX) are handled separately below - anything hidden is treated
+// as tooling cruft, not something the student wrote.
+const IGNORED_DIRS = new Set(["node_modules", "__pycache__", "venv", "dist", "build"]);
+
+export function isIgnoredDir(name: string): boolean {
+  return name === "__MACOSX" || name.startsWith(".") || IGNORED_DIRS.has(name);
+}
+
+/** True if the path lives inside an ignored directory (dot-folder, build output, __MACOSX). Checks directory segments only, so a top-level dotfile like `.gitignore` is kept. */
+export function pathInIgnoredDir(relPath: string): boolean {
+  return relPath
+    .split("/")
+    .slice(0, -1)
+    .some(isIgnoredDir);
+}
 
 async function walk(rootDir: string): Promise<string[]> {
   const results: string[] = [];
@@ -16,7 +32,7 @@ async function walk(rootDir: string): Promise<string[]> {
     }
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        if (IGNORED_DIRS.has(entry.name)) continue;
+        if (isIgnoredDir(entry.name)) continue;
         await recurse(path.join(currentDir, entry.name), `${relPrefix}${entry.name}/`);
       } else if (entry.isFile()) {
         results.push(`${relPrefix}${entry.name}`);

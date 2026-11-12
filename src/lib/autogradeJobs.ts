@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { autogradeSolution } from "./aiGateway";
 import { parseGradingKey, type GradingKeyDoc } from "./gradingKey";
-import { getAiGatewayKey } from "./settings";
+import { getAiAccess, type AiAccess } from "./settings";
 import {
   DATA_ROOT,
   getGradingKeyRaw,
@@ -95,8 +95,8 @@ export async function startBulkAutograde(input: StartBulkAutogradeInput): Promis
     const project = await getProject(slug);
     if (!project) throw new Error("Unknown project.");
 
-    const apiKey = await getAiGatewayKey();
-    if (!apiKey) throw new Error("No AI Gateway key configured. Set one in Settings first.");
+    const access = await getAiAccess();
+    if (!access) throw new Error("No AI Gateway key configured. Set one in Settings first.");
 
     const gradingKey = parseGradingKey(await getGradingKeyRaw(slug));
     if (!gradingKey?.sections?.length) {
@@ -128,7 +128,7 @@ export async function startBulkAutograde(input: StartBulkAutogradeInput): Promis
     started = true;
     // Runs after the request that started it has already responded. The
     // lock is held until the job truly finishes, not just until it starts.
-    void runJob(job, apiKey, gradingKey).finally(() => {
+    void runJob(job, access, gradingKey).finally(() => {
       activeJobs.delete(job.id);
       lockedProjects.delete(slug);
     });
@@ -139,7 +139,7 @@ export async function startBulkAutograde(input: StartBulkAutogradeInput): Promis
   }
 }
 
-async function runJob(job: AutogradeJob, apiKey: string, gradingKey: GradingKeyDoc): Promise<void> {
+async function runJob(job: AutogradeJob, access: AiAccess, gradingKey: GradingKeyDoc): Promise<void> {
   for (const item of job.items) {
     if (job.cancelRequested) {
       item.status = "skipped";
@@ -155,7 +155,7 @@ async function runJob(job: AutogradeJob, apiKey: string, gradingKey: GradingKeyD
       if (!solution || !solutionDiff) throw new Error("Solution diff not found.");
 
       const outcome = await autogradeSolution({
-        apiKey,
+        access,
         modelId: job.model,
         gradingKey,
         files: solutionDiff.files,

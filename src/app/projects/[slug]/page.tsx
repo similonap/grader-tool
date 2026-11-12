@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { allCriterionIds, checkedPoints, parseGradingKey, totalPoints } from "@/lib/gradingKey";
-import { hasAiGatewayKey } from "@/lib/settings";
+import { isAiConfigured } from "@/lib/settings";
 import { getGradingKeyRaw, getGradingState, getProject, listSolutions } from "@/lib/storage";
 import { DeleteProjectButton } from "./DeleteProjectButton";
 import { ProjectAnalysis } from "./ProjectAnalysis";
@@ -26,7 +26,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
   const [gradingKeyRaw, solutions, aiGatewayConfigured] = await Promise.all([
     getGradingKeyRaw(slug),
     listSolutions(slug),
-    hasAiGatewayKey(),
+    isAiConfigured(),
   ]);
   const gradingKey = parseGradingKey(gradingKeyRaw);
   const hasStructuredGradingKey = !!gradingKey?.sections?.length;

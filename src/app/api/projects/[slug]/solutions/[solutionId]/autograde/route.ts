@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { autogradeSolution } from "@/lib/aiGateway";
 import { parseGradingKey } from "@/lib/gradingKey";
-import { getAiGatewayKey } from "@/lib/settings";
+import { getAiAccess } from "@/lib/settings";
 import {
   getGradingKeyRaw,
   getProject,
@@ -17,8 +17,8 @@ export async function POST(
 ) {
   const { slug, solutionId } = await ctx.params;
 
-  const apiKey = await getAiGatewayKey();
-  if (!apiKey) {
+  const access = await getAiAccess();
+  if (!access) {
     return NextResponse.json({ error: "No AI Gateway key configured. Set one in Settings first." }, { status: 400 });
   }
 
@@ -55,7 +55,7 @@ export async function POST(
 
   try {
     const outcome = await autogradeSolution({
-      apiKey,
+      access,
       modelId: modelId.trim(),
       gradingKey,
       files: solutionDiff.files,

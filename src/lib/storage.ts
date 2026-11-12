@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { detectEnvironment } from "./environment";
+import { pathInIgnoredDir } from "./files";
 import { cloneProjectRepo, initProjectRepo } from "./projectRepo";
 import { slugify, uniqueSlug } from "./slug";
 import { computeSolutionDiff } from "./solutionDiff";
@@ -300,7 +301,11 @@ async function writeSolutionRecord(slug: string, solution: SolutionMeta, record:
 export async function getSolutionDiff(slug: string, solution: SolutionMeta): Promise<SolutionDiff | null> {
   const record = await getSolutionRecord(slug, solution);
   if (!record) return null;
-  return { solutionId: record.solutionId, computedAt: record.diff.computedAt, files: record.diff.files };
+  // Also filter on read, not just at compute time, so solutions uploaded
+  // before dot-folders/__MACOSX were excluded stop showing that noise in
+  // the diff view and in autograding without needing a re-upload.
+  const files = record.diff.files.filter((f) => !pathInIgnoredDir(f.path));
+  return { solutionId: record.solutionId, computedAt: record.diff.computedAt, files };
 }
 
 /** Upgrades a solution's on-disk file to the combined diff+grading format if it isn't already. Safe to call repeatedly. */

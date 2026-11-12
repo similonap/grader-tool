@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { allCriterionIds, parseGradingKey } from "@/lib/gradingKey";
-import { hasAiGatewayKey } from "@/lib/settings";
+import { isAiConfigured } from "@/lib/settings";
 import { getGradingKeyRaw, getGradingState, getProject, getSolution, getSolutionDiff } from "@/lib/storage";
 import type { FileDiffEntry } from "@/lib/types";
 import { SolutionWorkspace } from "./SolutionWorkspace";
@@ -22,7 +22,7 @@ export default async function SolutionDiffPage({
   const [solutionDiff, gradingKeyRaw, aiGatewayConfigured] = await Promise.all([
     getSolutionDiff(slug, solution),
     getGradingKeyRaw(slug),
-    hasAiGatewayKey(),
+    isAiConfigured(),
   ]);
   const gradingKey = parseGradingKey(gradingKeyRaw);
   const initialGrading = await getGradingState(slug, solutionId, allCriterionIds(gradingKey));

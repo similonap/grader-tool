@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GatewayModelOption } from "@/lib/aiGateway";
 import { CUSTOM_LANGUAGE, FEEDBACK_LANGUAGES, resolveInitialLanguage } from "@/lib/feedbackLanguages";
+import { fmtPts } from "@/lib/gradingKeyDisplay";
 import type { AutogradeJob, AutogradeJobItemStatus } from "@/lib/types";
 
 const STATUS_LABEL: Record<AutogradeJobItemStatus, string> = {
@@ -491,7 +492,7 @@ export function SolutionsTable({
                     <td className="py-2 pr-4">
                       {solution.grade && solution.graded ? (
                         <span className={scoreBadgeClass(solution.grade.checked, solution.grade.total)}>
-                          {solution.grade.checked} / {solution.grade.total} pts
+                          {fmtPts(solution.grade.checked)} / {fmtPts(solution.grade.total)} pts
                         </span>
                       ) : (
                         <span className="text-muted-2">—</span>
@@ -556,10 +557,6 @@ function SortButton({
       <span className={`text-[10px] ${active ? "text-accent" : "text-muted-2"}`}>{active && dir === "desc" ? "▼" : "▲"}</span>
     </button>
   );
-}
-
-function fmtPts(n: number): string {
-  return (Math.round(n * 100) / 100).toString();
 }
 
 // Score pill: green once the student has 50% or more of the available points.

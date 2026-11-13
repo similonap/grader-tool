@@ -15,6 +15,7 @@ import type { GatewayModelOption } from "@/lib/aiGateway";
 import type { DiffLine } from "@/lib/diff";
 import { CUSTOM_LANGUAGE, FEEDBACK_LANGUAGES, resolveInitialLanguage } from "@/lib/feedbackLanguages";
 import { checkedPoints, criterionId, totalPoints, type GradingKeyDoc } from "@/lib/gradingKey";
+import { fmtPts } from "@/lib/gradingKeyDisplay";
 import type { CodeReference, CriterionGrade, FileDiffEntry, FileStatus, SolutionGrading } from "@/lib/types";
 
 interface TreeNode {
@@ -1090,10 +1091,6 @@ function GradingPanel({
       </div>
     </div>
   );
-}
-
-function fmtPts(n: number): string {
-  return (Math.round(n * 100) / 100).toString();
 }
 
 // Score pill colour: green once the solution has 50% or more of the points.

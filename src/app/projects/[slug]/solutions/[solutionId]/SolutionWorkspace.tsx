@@ -293,17 +293,20 @@ export function SolutionWorkspace({
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [diff, highlightIndex, jumpNonce]);
 
-  const isFirstGradingRender = useRef(true);
+  // Compare content, not "first render": Strict Mode re-runs effects on mount,
+  // which made a first-render flag save (and bump updatedAt) on every open.
+  const lastSavedGrading = useRef(
+    JSON.stringify({ overallComment: initialGrading.overallComment, criteria: initialGrading.criteria })
+  );
   useEffect(() => {
-    if (isFirstGradingRender.current) {
-      isFirstGradingRender.current = false;
-      return;
-    }
+    const body = JSON.stringify({ overallComment: grading.overallComment, criteria: grading.criteria });
+    if (body === lastSavedGrading.current) return;
     const handle = setTimeout(() => {
+      lastSavedGrading.current = body;
       fetch(`/api/projects/${slug}/solutions/${solutionId}/grading`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ overallComment: grading.overallComment, criteria: grading.criteria }),
+        body,
       }).catch(() => {});
     }, 600);
     return () => clearTimeout(handle);

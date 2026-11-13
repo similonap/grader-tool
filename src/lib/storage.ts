@@ -325,11 +325,26 @@ export interface AddSolutionInput {
   group: string | null;
 }
 
+/**
+ * Student name from an upload's filename: drops ".zip", Moodle's
+ * "_<id>_assignsubmission_file..." tail and any " - <assignment>" suffix.
+ * "Zhao Andy - 26-27-s1-toets.zip" -> "Zhao Andy". Falls back to the bare filename.
+ */
+export function studentNameFromFilename(filename: string): string {
+  const bare = filename.replace(/\.zip$/i, "").trim();
+  const name = bare
+    .replace(/_\d+_assignsubmission.*$/i, "")
+    .replace(/\s+-\s+.*$/, "")
+    .trim();
+  return name || bare;
+}
+
 export async function addSolution(slug: string, input: AddSolutionInput): Promise<SolutionMeta> {
   const project = await getProject(slug);
   if (!project) throw new Error(`Unknown project: ${slug}`);
 
   const baseLabel = input.originalFilename.replace(/\.zip$/i, "");
+  const label = studentNameFromFilename(input.originalFilename);
 
   // Re-uploading a solution with the same name overwrites it - including its
   // old diff and any saved grading, which would otherwise describe content
@@ -358,7 +373,7 @@ export async function addSolution(slug: string, input: AddSolutionInput): Promis
 
   const meta: SolutionMeta = {
     id,
-    label: baseLabel,
+    label,
     group: input.group?.trim() || null,
     originalFilename: input.originalFilename,
     uploadedAt: new Date().toISOString(),

@@ -43,12 +43,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/settings" className="text-sm text-muted hover:text-ink">
                 Settings
               </Link>
-              <Link
-                href="/new"
-                className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:brightness-105"
-              >
-                New grading project
-              </Link>
             </div>
           </div>
         </header>

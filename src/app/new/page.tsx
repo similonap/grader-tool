@@ -3,6 +3,25 @@
 import { useRouter } from "next/navigation";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 
+const EXAMPLE_GRADING_KEY = `{
+  "title": "Library app",
+  "sections": [
+    {
+      "id": "basics",
+      "title": "Basics",
+      "criteria": [
+        { "id": "list", "description": "Shows the list of books", "points": 2 },
+        { "id": "search", "description": "Search works", "points": 3 }
+      ]
+    },
+    {
+      "id": "quality",
+      "title": "Code quality",
+      "criteria": [{ "id": "naming", "description": "Clear naming, no dead code", "points": 1 }]
+    }
+  ]
+}`;
+
 type Step = "files" | "label";
 
 export default function NewProjectPage() {
@@ -13,6 +32,7 @@ export default function NewProjectPage() {
   const [label, setLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   function goToLabelStep(e: FormEvent) {
     e.preventDefault();
@@ -70,6 +90,32 @@ export default function NewProjectPage() {
             file={gradingKey}
             onChange={setGradingKey}
           />
+          <details className="rounded-lg border border-line bg-surface-2 px-3 py-2">
+            <summary className="cursor-pointer text-xs font-medium text-muted hover:text-ink">
+              What does a grading key look like?
+            </summary>
+            <p className="mt-2 text-xs text-muted">
+              Sections hold criteria; each criterion&apos;s <code>points</code> add up to the project total.
+              <code>id</code> and <code>title</code> are optional - without an <code>id</code> a criterion gets a
+              positional one.
+            </p>
+            <div className="relative mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(EXAMPLE_GRADING_KEY);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                }}
+                className="absolute top-1.5 right-1.5 rounded-md border border-line-strong bg-surface-2 px-2 py-1 text-[11px] font-medium text-muted hover:border-muted-2 hover:text-ink"
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+              <pre className="overflow-x-auto rounded-md bg-surface p-3 pr-16 font-mono text-[11px] leading-relaxed text-muted">
+                {EXAMPLE_GRADING_KEY}
+              </pre>
+            </div>
+          </details>
           <button
             type="submit"
             disabled={!starterZip || !gradingKey}

@@ -71,6 +71,17 @@ Op de projectpagina kan je ook alle oplossingen in één keer laten **Autograde*
 
 Via **Git repo** op de projectpagina maak je van het project een Git-repository die je kan pushen en pullen. Een collega importeert het dan via de Git-URL op het dashboard. De app gebruikt de Git-inloggegevens die al op je computer staan (SSH-sleutel, `gh auth login`, ...).
 
+### 7. Puntenboek per vak (Gradebook)
+
+Via de sectie **Gradebook** onderaan het startscherm hou je de eindscores per vak bij. Maak per academiejaar één course aan (bv. "Webontwikkeling 2026-2027").
+
+1. **Studentenlijst importeren**: upload de `.xlsx`-export met de kolommen *Student*, *Subgroep* en (optioneel) *Pointer persoon*, *School e-mailadres* en *Vrijstelling*. Opnieuw uploaden vervangt de lijst; scores van studenten die erop blijven staan, blijven behouden.
+2. **Onderdelen koppelen**: standaard zijn dat tussentijdse toets (30%), project (30%) en examen (40%), elk op /20. Gewicht en maximum kan je aanpassen. Koppel elk onderdeel aan het verbeterproject waarin het verbeterd is.
+3. **Scores overzetten**: met **Import scores** haal je de punten van alle verbeterde oplossingen uit dat project op. Ze worden herschaald van het totaal van de verbetersleutel naar het maximum van het onderdeel, en gekoppeld aan de student via dezelfde naamherkenning als de puntenlijst-import. Wat niet gekoppeld raakte, wordt erbij vermeld. Zijn nog niet alle verbeteringen vergrendeld (**Lock** op de projectpagina), dan vraagt de app eerst of je toch wil importeren - er wordt pas iets weggeschreven als je bevestigt.
+4. **Scores verwijderen**: met **Clear** naast een onderdeel wis je alle scores van dat onderdeel in één keer, na bevestiging. De verbeteringen zelf blijven in het verbeterproject staan, dus je kan ze nadien opnieuw importeren.
+5. **Gradebook**: je kan in de tabel vrij scores aanpassen om te simuleren ("wat als deze student 14 haalt?"); het totaal rekent mee terwijl je typt en aangepaste velden staan in het accentkleur. **Dit wordt niet bewaard**: na een refresh staan de opgeslagen scores er weer. Scores komen enkel via **Import scores** in het puntenboek.
+6. **Results**: gemiddelde, mediaan, slaagpercentage, spreiding, de verdeling van de eindscores, en een vergelijking per onderdeel en per klasgroep. Alleen studenten met een score voor élk onderdeel tellen mee in die cijfers.
+
 ## Getting Started
 
 First, run the development server:

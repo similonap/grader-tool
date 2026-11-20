@@ -75,6 +75,7 @@ export function SolutionsTable({
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState(false);
   const [job, setJob] = useState<AutogradeJob | null>(null);
   const [gatewayModels, setGatewayModels] = useState<GatewayModelOption[] | null>(null);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -285,12 +286,51 @@ export function SolutionsTable({
         }
       : null;
 
+  // Only hand out grades once every solution is final - an unlocked one can
+  // still change, and a copied CSV can't be taken back.
+  const lockedCount = solutions.filter((s) => s.locked).length;
+  const allLocked = solutions.length > 0 && lockedCount === solutions.length;
+
+  function copyCsv() {
+    const esc = (v: string) => (/[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const rows = [
+      ["Student", "Group", "Points", "Total", "Percentage"],
+      ...solutions.map((s) => [
+        s.label,
+        s.group ?? "",
+        s.grade ? fmtPts(s.grade.checked) : "",
+        s.grade ? fmtPts(s.grade.total) : "",
+        s.grade && s.grade.total > 0 ? ((s.grade.checked / s.grade.total) * 100).toFixed(1) : "",
+      ]),
+    ];
+    void navigator.clipboard.writeText(rows.map((r) => r.map(esc).join(";")).join("\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
     <div className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <h2 className="font-display text-lg font-semibold text-ink">
-          Solutions <span className="font-sans text-sm font-normal text-muted-2">({solutions.length})</span>
-        </h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="font-display text-lg font-semibold text-ink">
+            Solutions <span className="font-sans text-sm font-normal text-muted-2">({solutions.length})</span>
+          </h2>
+          {hasStructuredGradingKey && (
+            <button
+              type="button"
+              onClick={copyCsv}
+              disabled={!allLocked}
+              title={
+                allLocked
+                  ? "Copy every grade as CSV (semicolon-separated)"
+                  : `Lock every solution first - ${lockedCount} of ${solutions.length} locked.`
+              }
+              className="rounded-md border border-line-strong px-2.5 py-1 text-xs font-medium text-muted hover:border-muted-2 hover:text-ink disabled:opacity-40"
+            >
+              {copied ? "Copied" : "Copy grades as CSV"}
+            </button>
+          )}
+        </div>
 
         {!hasAiGatewayKey ? (
           <p className="text-xs text-muted">

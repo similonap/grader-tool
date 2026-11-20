@@ -437,6 +437,8 @@ export interface PuntenlijstAssignment {
   solutionId: string;
   label: string;
   group: string | null;
+  studentId?: string | null;
+  email?: string | null;
 }
 
 /** Applies confirmed puntenlijst matches: renames each solution's label and sets its group. The solution's id/URL/stored files are untouched. */
@@ -450,6 +452,10 @@ export async function applyPuntenlijstAssignments(slug: string, assignments: Pun
     if (!solution) continue;
     solution.label = assignment.label;
     solution.group = assignment.group;
+    // Only overwrite a known number - a puntenlijst without the column
+    // shouldn't wipe what an earlier match found.
+    if (assignment.studentId) solution.studentId = assignment.studentId;
+    if (assignment.email) solution.email = assignment.email;
     count++;
   }
 

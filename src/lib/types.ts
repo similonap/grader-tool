@@ -33,6 +33,10 @@ export interface SolutionMeta {
   diffRelPath: string;
   /** Manually marked as finalized - blocks further grading (autograde and manual) until unlocked. */
   locked?: boolean;
+  /** Student number ("Pointer persoon"), set when the solution is matched to a puntenlijst row. */
+  studentId?: string | null;
+  /** School e-mail address, set when the solution is matched to a puntenlijst row. */
+  email?: string | null;
 }
 
 export type FileStatus = "added" | "removed" | "modified" | "unchanged";

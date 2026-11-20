@@ -6,6 +6,8 @@ import { useMemo, useRef, useState, type ChangeEvent } from "react";
 interface PuntenlijstStudent {
   name: string;
   group: string | null;
+  studentId: string | null;
+  email: string | null;
 }
 
 interface Suggestion {
@@ -88,9 +90,23 @@ export function PuntenlijstImportButton({ slug }: { slug: string }) {
         const row = rows[m.solutionId];
         if (!row?.checked || !row.selectedName) return null;
         const student = studentByName.get(row.selectedName);
-        return { solutionId: m.solutionId, name: row.selectedName, group: student?.group ?? null };
+        return {
+          solutionId: m.solutionId,
+          name: row.selectedName,
+          group: student?.group ?? null,
+          studentId: student?.studentId ?? null,
+          email: student?.email ?? null,
+        };
       })
-      .filter((a): a is { solutionId: string; name: string; group: string | null } => a !== null);
+      .filter(
+        (a): a is {
+          solutionId: string;
+          name: string;
+          group: string | null;
+          studentId: string | null;
+          email: string | null;
+        } => a !== null
+      );
 
     if (assignments.length === 0) {
       close();

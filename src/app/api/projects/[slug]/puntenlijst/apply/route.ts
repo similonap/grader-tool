@@ -5,6 +5,8 @@ interface AssignmentInput {
   solutionId?: unknown;
   name?: unknown;
   group?: unknown;
+  studentId?: unknown;
+  email?: unknown;
 }
 
 export async function POST(request: Request, ctx: RouteContext<"/api/projects/[slug]/puntenlijst/apply">) {
@@ -22,7 +24,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/projects/[s
   }
 
   const valid = assignments.filter(
-    (a): a is { solutionId: string; name: string; group: string | null } =>
+    (a): a is { solutionId: string; name: string; group: string | null; studentId?: unknown; email?: unknown } =>
       typeof a.solutionId === "string" &&
       typeof a.name === "string" &&
       a.name.trim() !== "" &&
@@ -34,7 +36,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/projects/[s
 
   const updatedCount = await applyPuntenlijstAssignments(
     slug,
-    valid.map((a) => ({ solutionId: a.solutionId, label: a.name.trim(), group: a.group?.trim() || null }))
+    valid.map((a) => ({
+      solutionId: a.solutionId,
+      label: a.name.trim(),
+      group: a.group?.trim() || null,
+      studentId: typeof a.studentId === "string" && a.studentId.trim() !== "" ? a.studentId.trim() : null,
+      email: typeof a.email === "string" && a.email.trim() !== "" ? a.email.trim() : null,
+    }))
   );
   return NextResponse.json({ updatedCount });
 }

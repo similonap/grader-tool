@@ -67,6 +67,8 @@ Klik op een oplossing om de werkruimte te openen:
 
 Op de projectpagina kan je ook alle oplossingen in één keer laten **Autograde**n, en toont **Analysis** de scoreverdeling en de makkelijkste/moeilijkste criteria.
 
+Met **Copy grades as CSV** zet je alle punten op het klembord (puntkomma-gescheiden, klaar om in Excel te plakken). Dat kan pas wanneer élke oplossing vergrendeld is (**Lock**), zodat je geen cijfers doorgeeft die nog kunnen veranderen.
+
 ### 6. Delen met collega's via Git (optioneel)
 
 Via **Git repo** op de projectpagina maak je van het project een Git-repository die je kan pushen en pullen. Een collega importeert het dan via de Git-URL op het dashboard. De app gebruikt de Git-inloggegevens die al op je computer staan (SSH-sleutel, `gh auth login`, ...).
@@ -81,6 +83,7 @@ Via de sectie **Gradebook** onderaan het startscherm hou je de eindscores per va
 4. **Scores verwijderen**: met **Clear** naast een onderdeel wis je alle scores van dat onderdeel in één keer, na bevestiging. De verbeteringen zelf blijven in het verbeterproject staan, dus je kan ze nadien opnieuw importeren.
 5. **Gradebook**: je kan in de tabel vrij scores aanpassen om te simuleren ("wat als deze student 14 haalt?"); het totaal rekent mee terwijl je typt en aangepaste velden staan in het accentkleur. **Dit wordt niet bewaard**: na een refresh staan de opgeslagen scores er weer. Scores komen enkel via **Import scores** in het puntenboek.
 6. **Results**: gemiddelde, mediaan, slaagpercentage, spreiding, de verdeling van de eindscores, en een vergelijking per onderdeel en per klasgroep. Alleen studenten met een score voor élk onderdeel tellen mee in die cijfers.
+7. **Export to Excel**: downloadt het puntenboek als `.xlsx` met twee tabbladen: *Punten* (één rij per student, met totaal op /20 en geslaagd/niet geslaagd) en *Statistiek* (de cijfers hierboven plus twee grafieken: de verdeling van de totaalscores en het gemiddelde per klasgroep).
 
 ## Getting Started
 

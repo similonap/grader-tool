@@ -54,6 +54,10 @@ export interface SolutionRow {
   graded: boolean;
   /** Manually marked as finalized - blocks further grading until unlocked. */
   locked: boolean;
+  /** Student number from the puntenlijst, empty until the solution is matched. */
+  studentId: string | null;
+  /** School e-mail from the puntenlijst, empty until the solution is matched. */
+  email: string | null;
 }
 
 export function SolutionsTable({
@@ -293,14 +297,19 @@ export function SolutionsTable({
 
   function copyCsv() {
     const esc = (v: string) => (/[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    // Semicolons and decimal commas, so Excel in a Dutch locale reads the
+    // scores as numbers instead of text.
+    const nl = (n: number, decimals: number) => n.toFixed(decimals).replace(".", ",");
     const rows = [
-      ["Student", "Group", "Points", "Total", "Percentage"],
+      ["Studentnummer", "Student", "E-mail", "Group", "Score /20", "Punten", "Totaal"],
       ...solutions.map((s) => [
+        s.studentId ?? "",
         s.label,
+        s.email ?? "",
         s.group ?? "",
-        s.grade ? fmtPts(s.grade.checked) : "",
-        s.grade ? fmtPts(s.grade.total) : "",
-        s.grade && s.grade.total > 0 ? ((s.grade.checked / s.grade.total) * 100).toFixed(1) : "",
+        s.grade && s.grade.total > 0 ? nl((s.grade.checked / s.grade.total) * 20, 2) : "",
+        s.grade ? fmtPts(s.grade.checked).replace(".", ",") : "",
+        s.grade ? fmtPts(s.grade.total).replace(".", ",") : "",
       ]),
     ];
     void navigator.clipboard.writeText(rows.map((r) => r.map(esc).join(";")).join("\n"));

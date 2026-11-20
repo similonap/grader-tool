@@ -58,6 +58,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[slug
           grade,
           graded,
           locked: solution.locked ?? false,
+          studentId: solution.studentId ?? null,
+          email: solution.email ?? null,
         };
       })
   );

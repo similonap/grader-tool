@@ -65,6 +65,12 @@ export function CourseActions({ courseId, label }: { courseId: string; label: st
           {busy === "import" ? "Reading…" : "Import student list"}
         </button>
         <input ref={inputRef} type="file" accept=".xlsx" onChange={handleFileChange} className="hidden" />
+        <a
+          href={`/api/courses/${courseId}/export`}
+          className="rounded-md border border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:border-muted-2 hover:text-ink"
+        >
+          Export to Excel
+        </a>
         <button
           type="button"
           onClick={handleDelete}

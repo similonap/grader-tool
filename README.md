@@ -67,7 +67,7 @@ Klik op een oplossing om de werkruimte te openen:
 
 Op de projectpagina kan je ook alle oplossingen in één keer laten **Autograde**n, en toont **Analysis** de scoreverdeling en de makkelijkste/moeilijkste criteria.
 
-Met **Copy grades as CSV** zet je alle punten op het klembord (puntkomma-gescheiden, klaar om in Excel te plakken). Dat kan pas wanneer élke oplossing vergrendeld is (**Lock**), zodat je geen cijfers doorgeeft die nog kunnen veranderen.
+Met **Copy grades as CSV** zet je alle punten op het klembord (puntkomma-gescheiden, klaar om in Excel te plakken), met studentnummer, naam, school e-mailadres, groep, de score op /20 (2 decimalen) en de ruwe punten. Puntkomma's en decimale komma's, zodat Excel de scores als getallen leest. Dat kan pas wanneer élke oplossing vergrendeld is (**Lock**), zodat je geen cijfers doorgeeft die nog kunnen veranderen. Studentnummer en e-mailadres komen uit **Import puntenlijst** (dialoog *Match solutions to students*); oplossingen die je vóór deze versie koppelde hebben die gegevens nog niet - koppel ze opnieuw om die kolommen te vullen.
 
 ### 6. Delen met collega's via Git (optioneel)
 

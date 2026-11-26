@@ -24,8 +24,10 @@ export interface SectionStat {
   points: number;
   /** Average points achieved on this section across graded solutions. */
   avgPoints: number;
-  /** avgPoints / points, in 0..1. */
+  /** avgPoints / points, in 0..1: the question's p-value. */
   rate: number;
+  /** Item-rest correlation: this question's score vs. the total of the other questions. null when undefined (no variance, < 2 graded). */
+  rir: number | null;
   criteria: CriterionStat[];
 }
 
@@ -62,6 +64,49 @@ export interface ProjectStats {
   /** Up to 5 criteria with the highest success rate. */
   easiest: CriterionStat[];
   groups: GroupStat[];
+  /** Cronbach's alpha over the sections (questions). null when undefined. */
+  cronbachAlpha: number | null;
+}
+
+/** Rir below this flags a question as not discriminating well. */
+export const RIR_THRESHOLD = 0.2;
+/** Cronbach's alpha at or above this counts as an acceptably reliable test. */
+export const ALPHA_THRESHOLD = 0.7;
+
+function variance(xs: number[]): number {
+  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+  return xs.reduce((a, x) => a + (x - mean) ** 2, 0) / xs.length;
+}
+
+function pearson(xs: number[], ys: number[]): number | null {
+  const n = xs.length;
+  if (n < 2) return null;
+  const mx = xs.reduce((a, b) => a + b, 0) / n;
+  const my = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < n; i++) {
+    sxy += (xs[i] - mx) * (ys[i] - my);
+    sxx += (xs[i] - mx) ** 2;
+    syy += (ys[i] - my) ** 2;
+  }
+  return sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : null;
+}
+
+/**
+ * Classical item analysis on a students × items score matrix: the item-rest
+ * correlation (Rir) of every item and Cronbach's alpha of the whole test.
+ */
+export function itemAnalysis(matrix: number[][]): { rir: (number | null)[]; alpha: number | null } {
+  const k = matrix[0]?.length ?? 0;
+  const totals = matrix.map((row) => row.reduce((a, b) => a + b, 0));
+  const rir = Array.from({ length: k }, (_, i) =>
+    pearson(matrix.map((row) => row[i]), matrix.map((row, s) => totals[s] - row[i]))
+  );
+  if (matrix.length < 2 || k < 2) return { rir, alpha: null };
+  const totalVar = variance(totals);
+  if (totalVar === 0) return { rir, alpha: null };
+  const itemVarSum = Array.from({ length: k }, (_, i) => variance(matrix.map((row) => row[i]))).reduce((a, b) => a + b, 0);
+  return { rir, alpha: (k / (k - 1)) * (1 - itemVarSum / totalVar) };
 }
 
 function median(sorted: number[]): number {
@@ -95,6 +140,17 @@ export async function computeProjectStats(slug: string): Promise<ProjectStats | 
   const graded = entries.filter((e) => Date.parse(e.grading.updatedAt) > 0);
   const gradedCount = graded.length;
 
+  // One row per graded solution, one column per section (question).
+  const sectionScores = graded.map((e) =>
+    gradingKey.sections!.map((section, si) =>
+      (section.criteria ?? []).reduce(
+        (s, c, ci) => s + (e.grading.criteria[criterionId(section, si, c, ci)]?.checked ? c.points ?? 0 : 0),
+        0
+      )
+    )
+  );
+  const analysis = itemAnalysis(sectionScores);
+
   const sections: SectionStat[] = gradingKey.sections.map((section, si) => {
     const criteriaDefs = section.criteria ?? [];
     const sectionPoints = criteriaDefs.reduce((sum, c) => sum + (c.points ?? 0), 0);
@@ -118,15 +174,7 @@ export async function computeProjectStats(slug: string): Promise<ProjectStats | 
     });
 
     const avgPoints =
-      gradedCount > 0
-        ? graded.reduce((sum, e) => {
-            const got = criteriaDefs.reduce(
-              (s, c, ci) => s + (e.grading.criteria[criterionId(section, si, c, ci)]?.checked ? c.points ?? 0 : 0),
-              0
-            );
-            return sum + got;
-          }, 0) / gradedCount
-        : 0;
+      gradedCount > 0 ? sectionScores.reduce((sum, row) => sum + row[si], 0) / gradedCount : 0;
 
     return {
       index: si,
@@ -135,6 +183,7 @@ export async function computeProjectStats(slug: string): Promise<ProjectStats | 
       points: sectionPoints,
       avgPoints,
       rate: sectionPoints > 0 ? avgPoints / sectionPoints : 0,
+      rir: analysis.rir[si],
       criteria,
     };
   });
@@ -149,7 +198,7 @@ export async function computeProjectStats(slug: string): Promise<ProjectStats | 
   const pointValues = scores.map((s) => s.points).sort((a, b) => a - b);
   const sum = pointValues.reduce((a, b) => a + b, 0);
   const average = gradedCount > 0 ? sum / gradedCount : 0;
-  const variance =
+  const scoreVariance =
     gradedCount > 0 ? pointValues.reduce((a, b) => a + (b - average) ** 2, 0) / gradedCount : 0;
 
   // Ten fixed 10%-wide buckets; a perfect score lands in the last one.
@@ -189,7 +238,7 @@ export async function computeProjectStats(slug: string): Promise<ProjectStats | 
     median: median(pointValues),
     min: pointValues[0] ?? 0,
     max: pointValues[pointValues.length - 1] ?? 0,
-    stdDev: Math.sqrt(variance),
+    stdDev: Math.sqrt(scoreVariance),
     passRate:
       gradedCount > 0
         ? pointValues.filter((v) => total > 0 && v / total >= 0.5).length / gradedCount
@@ -199,5 +248,6 @@ export async function computeProjectStats(slug: string): Promise<ProjectStats | 
     hardest: gradedCount > 0 ? byRate.slice(0, 5) : [],
     easiest: gradedCount > 0 ? [...byRate].reverse().slice(0, 5) : [],
     groups,
+    cronbachAlpha: analysis.alpha,
   };
 }

@@ -38,13 +38,10 @@ export function CourseStats({ stats }: { stats: Stats }) {
       </p>
 
       <div className="mt-5 space-y-8">
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3">
           <StatCard label="Average" value={`${on20(stats.averagePct).toFixed(1)}`} hint={pct(stats.averagePct)} />
-          <StatCard label="Median" value={`${on20(stats.medianPct).toFixed(1)}`} hint={pct(stats.medianPct)} />
           <StatCard label="Pass rate" value={pct(stats.passRate * 100)} hint="scored ≥ 10/20" />
           <StatCard label="Std dev" value={on20(stats.stdDevPct).toFixed(1)} hint="points on /20" />
-          <StatCard label="Lowest" value={on20(stats.minPct).toFixed(1)} hint={pct(stats.minPct)} />
-          <StatCard label="Highest" value={on20(stats.maxPct).toFixed(1)} hint={pct(stats.maxPct)} />
         </section>
 
         <section>

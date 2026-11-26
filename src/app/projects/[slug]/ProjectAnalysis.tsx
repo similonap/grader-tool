@@ -114,13 +114,12 @@ export async function ProjectAnalysis({ slug }: { slug: string }) {
         </p>
       ) : (
         <div className="mt-5 space-y-8">
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               label="Average"
               value={`${fmtPts(stats.average)} / ${fmtPts(stats.totalPoints)}`}
               hint={pct(stats.averagePct / 100)}
             />
-            <StatCard label="Median" value={fmtPts(stats.median)} hint="points" />
             <StatCard label="Pass rate" value={pct(stats.passRate)} hint="scored ≥ 50%" />
             <StatCard
               label="Std dev"
@@ -141,8 +140,6 @@ export async function ProjectAnalysis({ slug }: { slug: string }) {
                 </InfoButton>
               }
             />
-            <StatCard label="Lowest" value={fmtPts(stats.min)} hint="points" />
-            <StatCard label="Highest" value={fmtPts(stats.max)} hint="points" />
             <StatCard
               label="Cronbach's α"
               value={stats.cronbachAlpha === null ? "—" : stats.cronbachAlpha.toFixed(2)}
